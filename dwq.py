@@ -47,6 +47,9 @@ class Job(object):
         json_body = json.dumps(body)
         return disque.add_job(queue, json_body, **kwargs).decode("ascii")
 
+    def nack(s):
+        disque.nack(s.job_id)
+
     def wait(queue):
         _jobs = disque.get_job([queue])
         for queue_name, job_id, json_body in _jobs:

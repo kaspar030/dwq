@@ -23,11 +23,15 @@ def parse_args():
 
     return parser.parse_args()
 
-def create_body(repo, commit, command):
-    return { "repo" : repo, "commit" : commit, "command" : command }
+def create_body(repo, commit, command, options=None):
+    body = { "repo" : repo, "commit" : commit, "command" : command }
+    if options:
+        body["options"] = options
+
+    return body
 
 def queue_job(jobs_set, queue, body, status_queues):
-    job_id = Job.add(job_queue, body, status_queues)
+    job_id = Job.add(queue, body, status_queues)
     jobs_set.add(job_id)
 
 def vprint(*args, **kwargs):
@@ -60,7 +64,14 @@ def main():
                 command = args.command.replace("${1}", line)
             else:
                 command = line
-            job_id = queue_job(jobs, job_queue, create_body(args.repo, args.commit, command), [status_queue])
+
+            tmp = command.split("###")
+            command = tmp[0]
+            options = {}
+            if len(tmp) > 1:
+                options = json.loads(tmp[1])
+
+            job_id = queue_job(jobs, job_queue, create_body(args.repo, args.commit, command, options), [status_queue])
             vprint("client: job %s command=\"%s\" sent." % (job_id, command))
 
     total = len(jobs)

@@ -2,7 +2,9 @@
 import json
 import sys
 import threading
+import random
 import time
+import socket
 
 import cmdserver
 from dwq import Job, Disque
@@ -28,7 +30,15 @@ def worker(n, cmd_server_pool, gitjobdir):
                 job.done({ "status" : "error", "output" : "worker.py: invalid job description" })
                 continue
 
-            workdir = gitjobdir.get(repo, commit)
+            exclusive = None
+            try:
+                options = job.body["options"]
+                if options.get("jobdir") or "" == "exclusive":
+                    exclusive = str(random.random())
+            except KeyError:
+                pass
+
+            workdir = gitjobdir.get(repo, commit, exclusive)
             if not workdir:
                 job.nack()
 
@@ -36,19 +46,25 @@ def worker(n, cmd_server_pool, gitjobdir):
             output, result = handle.wait()
 
             print("worker %2i: result:" % n, result)
-            job.done({ "status" : result, "output" : output })
+            job.done({ "status" : result, "output" : output, "worker" : hostname })
             gitjobdir.release(workdir)
 
 workers = 4
+hostname = "unknown"
 
 def main():
     cmd_server_pool = cmdserver.CmdServerPool(workers)
     gitjobdir = GitJobDir("/tmp/wd", workers)
+
+    hostname = socket.gethostname()
 
     Disque.connect(["localhost:7711"])
 
     for n in range(1, workers + 1):
         threading.Thread(target=worker, args=(n, cmd_server_pool, gitjobdir), daemon=True).start()
 
-    while True:
-        time.sleep(10)
+    try:
+        while True:
+            time.sleep(10)
+    except KeyboardInterrupt:
+        gitjobdir.cleanup()
