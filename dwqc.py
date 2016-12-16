@@ -36,7 +36,8 @@ def vprint(*args, **kwargs):
         print(*args, **kwargs)
 
 verbose = False
-if __name__=="__main__":
+
+def main():
     args = parse_args()
 
     job_queue = args.queue

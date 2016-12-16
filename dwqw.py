@@ -41,7 +41,7 @@ def worker(n, cmd_server_pool, gitjobdir):
 
 workers = 4
 
-if __name__=="__main__":
+def main():
     cmd_server_pool = cmdserver.CmdServerPool(workers)
     gitjobdir = GitJobDir("/tmp/wd", workers)
 
