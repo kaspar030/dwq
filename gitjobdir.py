@@ -75,7 +75,7 @@ class GitJobDir(object):
                 use_count -= 1
                 if use_count == 0:
                     print("GitJobDir: last user of %s gone." % _dir)
-                    s.unused.append(_dir)
+                    s.clean_deferred(_dir)
 
                 s.use_counts[_dir] = use_count
 
@@ -83,13 +83,22 @@ class GitJobDir(object):
         print("gitjobdir: cleaning directory", _dir)
         shutil.rmtree(_dir)
 
+    def clean_deferred(s, _dir):
+        s.unused.append(_dir)
+
+#    def clean_deferred_handler(s, _dir):
+#        time.sleep(30)
+#        with s.Lock():
+#            (_dir, _time)
+
     def checkout(s, repo, commit, extra):
         target_path = s.path(GitJobDir.dirkey(repo, commit, extra))
         subprocess.check_call(["git", "cache", "clone", repo, commit, target_path])
 
     def cleanup(s):
-        for _dir, v in s.use_counts.items():
-            GitJobDir.clean_dir(_dir)
+        with s.Lock:
+            for _dir, v in s.use_counts.items():
+                GitJobDir.clean_dir(_dir)
 
 def print_sth():
     print("sth")

@@ -48,7 +48,10 @@ class Job(object):
         return disque.add_job(queue, json_body, **kwargs).decode("ascii")
 
     def nack(s):
-        disque.nack(s.job_id)
+        disque.nack_job(s.job_id)
+
+    def cancel(s):
+        disque.del_job(s.job_id)
 
     def wait(queue):
         _jobs = disque.get_job([queue])
@@ -58,3 +61,10 @@ class Job(object):
             body = json.loads(json_body.decode("utf-8"))
             disque.fast_ack(job_id)
             return body
+
+    def cancel_all(job_ids):
+        print("canceling all jobs...")
+        for job_id in job_ids:
+            disque.del_job(job_id)
+        print("done.")
+
