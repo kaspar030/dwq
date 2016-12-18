@@ -1,11 +1,17 @@
 import os
 from threading import Lock
 import hashlib
+import random
 import shutil
 import subprocess
 import sched, time
 import threading
-from collections import deque
+
+def dictadd(_dict, key, val=1):
+    pre = _dict.get(key) or None
+    post = (pre or 0) + val
+    _dict[key] = post
+    return post
 
 class GitJobDir(object):
     def __init__(s, basedir=None, maxdirs=4):
@@ -13,7 +19,8 @@ class GitJobDir(object):
         s.maxdirs = maxdirs
         s.lock = Lock()
         s.use_counts = {}
-        s.unused = deque()
+        s.unused = {}
+        s.deferred_clean_delay = 30
 
         try:
             os.mkdir(basedir)
@@ -40,31 +47,22 @@ class GitJobDir(object):
                         return None
                 try:
                     s.checkout(repo, commit, extra)
-                    _users = 0
                     s.maxdirs -= 1
                 except subprocess.CalledProcessError:
                     return None
 
-            _users += 1
-            s.use_counts[_dir] = _users
+            dictadd(s.use_counts, _dir)
 
             return _dir
 
     def clean_unused(s):
-        while True:
-            try:
-                _dir = s.unused.popleft()
-            except IndexError:
-                break
-
-            if s.use_counts.get(_dir):
-                continue
-
-            s.use_counts.pop(_dir, None)
-
-            GitJobDir.clean_dir(_dir)
-            s.maxdirs += 1
-            return True
+        for _dir, lock in s.unused.items():
+            if s.clean_dir(_dir):
+                print("gitjobdir: randomly cleaning", _dir)
+                s.maxdirs += 1
+                lock.release()
+                return True
+        return False
 
     def release(s, _dir):
         with s.lock:
@@ -72,33 +70,42 @@ class GitJobDir(object):
             if use_count == 0 or use_count == None:
                 print("GitJobDir: warning: release() on unused job dir!")
             else:
-                use_count -= 1
-                if use_count == 0:
+                if dictadd(s.use_counts, _dir, -1) == 0:
                     print("GitJobDir: last user of %s gone." % _dir)
                     s.clean_deferred(_dir)
 
-                s.use_counts[_dir] = use_count
-
-    def clean_dir(_dir):
+    def clean_dir(s, _dir, delete_only=False):
         print("gitjobdir: cleaning directory", _dir)
+        if not delete_only:
+            s.unused.pop(_dir, None)
+            s.use_counts.pop(_dir, None)
         shutil.rmtree(_dir)
+        return True
 
     def clean_deferred(s, _dir):
-        s.unused.append(_dir)
+        lock = Lock()
+        lock.acquire()
+        s.unused[_dir] = lock
+        threading.Thread(target=GitJobDir.clean_deferred_handler, args=(s, _dir, lock)).start()
 
-#    def clean_deferred_handler(s, _dir):
-#        time.sleep(30)
-#        with s.Lock():
-#            (_dir, _time)
+    def clean_deferred_handler(s, _dir, lock):
+        print("clean_deferred_handler() waiting for", _dir)
+        lock.acquire(timeout=s.deferred_clean_delay)
+        with s.lock:
+            if s.unused.get(_dir, None) == lock:
+                print("clean_deferred_handler() triggered for", _dir)
+                s.clean_dir(_dir)
+            else:
+                print("clean_deferred_handler() lock changed/gone")
 
     def checkout(s, repo, commit, extra):
         target_path = s.path(GitJobDir.dirkey(repo, commit, extra))
         subprocess.check_call(["git", "cache", "clone", repo, commit, target_path])
 
     def cleanup(s):
-        with s.Lock:
+        with s.lock:
             for _dir, v in s.use_counts.items():
-                GitJobDir.clean_dir(_dir)
+                s.clean_dir(_dir, True)
 
 def print_sth():
     print("sth")
@@ -122,5 +129,10 @@ if __name__=="__main__":
 
     _exclusive = gjd.get("http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9", "TEST")
     gjd.release(_exclusive)
+    time.sleep(1)
 
+    _dirb = gjd.get("http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9")
+    print("got", _dirb)
+
+    time.sleep(5)
     gjd.cleanup()
