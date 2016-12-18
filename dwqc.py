@@ -25,9 +25,9 @@ def nicetime(time):
         if hrs and minutes < 10:
             res += "0"
         res += "%im:" % minutes
-    if minutes and seconds < 10:
+    if minutes and secs < 10:
             res += "0"
-    res += "%2is" % secs
+    res += "%is" % secs
     return res
 
 def parse_args():
@@ -127,13 +127,13 @@ def main():
                     result_list.append(job)
             except KeyError:
                 vprint("client: ignoring unknown job result from id=%s" % job["job_id"])
-
             finally:
                 if args.progress:
                     print("")
+
             if args.progress:
-                passed = time.time() - start_time
-                per_job = passed / done
+                elapsed = time.time() - start_time
+                per_job = elapsed / done
                 eta = (total - done) * per_job
 
                 print("\033[F\033[Kclient: %s of %s jobs done (%s passed, %s failed.) " \
