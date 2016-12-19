@@ -58,6 +58,8 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 workdir = gitjobdir.get(repo, commit, exclusive)
                 if not workdir:
                     job.nack()
+                    print("worker %2i: cannot get job dir, requeueing job" % n)
+                    continue
 
                 handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True)
                 output, result = handle.wait()

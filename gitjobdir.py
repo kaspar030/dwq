@@ -17,6 +17,7 @@ class GitJobDir(object):
     def __init__(s, basedir=None, maxdirs=4):
         s.basedir = basedir
         s.maxdirs = maxdirs
+        s.dirs_left = maxdirs
         s.lock = Lock()
         s.use_counts = {}
         s.unused = {}
@@ -41,15 +42,19 @@ class GitJobDir(object):
 
             _users = s.use_counts.get(_dir)
             if _users == None:
-                if s.maxdirs == 0:
+                if s.dirs_left == 0:
                     if not s.clean_unused():
                         print("gitjobdir: could not get free jobdir slot")
                         return None
                 try:
                     s.checkout(repo, commit, extra)
-                    s.maxdirs -= 1
+                    s.dirs_left -= 1
                 except subprocess.CalledProcessError:
                     return None
+            else:
+                lock = s.unused.pop(_dir, None)
+                if lock:
+                    lock.release()
 
             dictadd(s.use_counts, _dir)
 
@@ -59,7 +64,6 @@ class GitJobDir(object):
         for _dir, lock in s.unused.items():
             if s.clean_dir(_dir):
                 print("gitjobdir: randomly cleaning", _dir)
-                s.maxdirs += 1
                 lock.release()
                 return True
         return False
@@ -79,6 +83,7 @@ class GitJobDir(object):
         if not delete_only:
             s.unused.pop(_dir, None)
             s.use_counts.pop(_dir, None)
+            s.dirs_left += 1
         shutil.rmtree(_dir)
         return True
 
