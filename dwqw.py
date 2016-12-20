@@ -36,6 +36,7 @@ def worker(n, cmd_server_pool, gitjobdir, args):
         while True:
             jobs = Job.get(args.queues)
             for job in jobs:
+                before = time.time()
                 print("worker %2i: got job %s from queue %s" % (n, job.job_id, job.queue_name))
 
                 try:
@@ -49,7 +50,7 @@ def worker(n, cmd_server_pool, gitjobdir, args):
 
                 exclusive = None
                 try:
-                    options = job.body["options"]
+                    options = job.body.get("options") or {}
                     if options.get("jobdir") or "" == "exclusive":
                         exclusive = str(random.random())
                 except KeyError:
@@ -64,15 +65,19 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True)
                 output, result = handle.wait()
 
-                print("worker %2i: result:" % n, result)
-
-                job.done({ "status" : result, "output" : output, "worker" : args.name })
+                if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
+                    print("worker %2i: result:", result, "nacks:", job.nacks, "re-queueing.")
+                    job.nack()
+                else:
+                    runtime = time.time() - before
+                    job.done({ "status" : result, "output" : output, "worker" : args.name, "runtime" : runtime, "body" : job.body })
+                    print("worker %2i: result:" % n, result, "runtime:", runtime)
                 gitjobdir.release(workdir)
 
     except Exception as e:
         print("worker %2i: uncaught exception")
         traceback.print_exc()
-        time.sleep("1")
+        time.sleep(10)
 
 def main():
     args = parse_args()
