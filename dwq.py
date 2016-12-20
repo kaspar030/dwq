@@ -10,21 +10,23 @@ class Disque(object):
         disque.connect()
 
 class Job(object):
-    def __init__(s, job_id, body, queue_name):
+    def __init__(s, job_id, body, queue_name, nacks, additional_deliveries):
         s.job_id = job_id
         s.body = body
         s.queue_name = queue_name
+        s.nacks = nacks
+        s.additional_deliveries = additional_deliveries
         s.status_queues = body.get("status_queues") or []
 
-    def get(queues):
+    def get(queues, timeout=None, count=None, nohang=False):
         global disque
         jobs = []
-        _jobs = disque.get_job(queues)
-        for queue_name, job_id, json_body in _jobs:
+        _jobs = disque.get_job(queues, timeout=timeout, count=count, nohang=nohang, withcounters=True)
+        for queue_name, job_id, json_body, nacks, additional_deliveries in _jobs:
             queue_name = queue_name.decode("ascii")
             job_id = job_id.decode("ascii")
             body = json.loads(json_body.decode("utf-8"))
-            jobs.append(Job(job_id, body, queue_name))
+            jobs.append(Job(job_id, body, queue_name, nacks, additional_deliveries))
 
         return jobs
 
