@@ -38,7 +38,6 @@ class Job(object):
         for queue in s.status_queues:
             if queue=="$jobid":
                 queue = s.job_id
-            print("worker: reporting done to %s" % queue)
             disque.add_job(queue, json.dumps({"job_id" : s.job_id, "state" : "done", "result" : result }))
 
         disque.ack_job(s.job_id)
@@ -65,8 +64,6 @@ class Job(object):
             return body
 
     def cancel_all(job_ids):
-        print("canceling all jobs...")
         for job_id in job_ids:
             disque.del_job(job_id)
-        print("done.")
 

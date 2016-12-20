@@ -71,7 +71,7 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 else:
                     runtime = time.time() - before
                     job.done({ "status" : result, "output" : output, "worker" : args.name, "runtime" : runtime, "body" : job.body })
-                    print("worker %2i: result:" % n, result, "runtime:", runtime)
+                    print("worker %2i: result:" % n, result, "runtime: %.1fs" % runtime)
                 gitjobdir.release(workdir)
 
     except Exception as e:
