@@ -7,11 +7,14 @@ import subprocess
 import sched, time
 import threading
 
-def dictadd(_dict, key, val=1):
-    pre = _dict.get(key) or None
+def dictadd(_dict, key, val=1, ret_post=True):
+    pre = _dict.get(key)
     post = (pre or 0) + val
     _dict[key] = post
-    return post
+    if ret_post:
+        return post
+    else:
+        return pre
 
 class GitJobDir(object):
     def __init__(s, basedir=None, maxdirs=4):
@@ -40,10 +43,10 @@ class GitJobDir(object):
 
             _dir = s.path(GitJobDir.dirkey(repo, commit, extra))
 
-            _users = s.use_counts.get(_dir)
-            if _users == None:
+            if dictadd(s.use_counts, _dir, ret_post=False) == None:
                 if s.dirs_left == 0:
                     if not s.clean_unused():
+                        s.use_counts.pop(_dir)
                         print("gitjobdir: could not get free jobdir slot")
                         return None
                 try:
@@ -56,14 +59,12 @@ class GitJobDir(object):
                 if lock:
                     lock.release()
 
-            dictadd(s.use_counts, _dir)
-
             return _dir
 
     def clean_unused(s):
         for _dir, lock in s.unused.items():
             if s.clean_dir(_dir):
-                print("gitjobdir: randomly cleaning", _dir)
+                print("gitjobdir: randomly cleaned", _dir)
                 lock.release()
                 return True
         return False
@@ -97,11 +98,9 @@ class GitJobDir(object):
         print("clean_deferred_handler() waiting for", _dir)
         lock.acquire(timeout=s.deferred_clean_delay)
         with s.lock:
-            if s.unused.get(_dir, None) == lock:
+            if s.unused.get(_dir) is lock:
                 print("clean_deferred_handler() triggered for", _dir)
                 s.clean_dir(_dir)
-            else:
-                print("clean_deferred_handler() lock changed/gone")
 
     def checkout(s, repo, commit, extra):
         target_path = s.path(GitJobDir.dirkey(repo, commit, extra))
@@ -111,9 +110,6 @@ class GitJobDir(object):
         with s.lock:
             for _dir, v in s.use_counts.items():
                 s.clean_dir(_dir, True)
-
-def print_sth():
-    print("sth")
 
 if __name__=="__main__":
     gjd = GitJobDir("/tmp/gitjobdir", maxdirs=1)
