@@ -56,7 +56,7 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 except KeyError:
                     pass
 
-                workdir = gitjobdir.get(repo, commit, exclusive)
+                workdir = gitjobdir.get(repo, commit, exclusive or str(n))
                 if not workdir:
                     job.nack()
                     print("worker %2i: cannot get job dir, requeueing job" % n)
