@@ -1,10 +1,9 @@
 import os
 from threading import Lock
 import hashlib
-import random
 import shutil
 import subprocess
-import sched, time
+import time
 import threading
 
 def dictadd(_dict, key, val=1, ret_post=True):
