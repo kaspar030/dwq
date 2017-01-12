@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 import threading
 import random
@@ -56,13 +57,20 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 except KeyError:
                     pass
 
+                _env = os.environ.copy()
+                _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name })
+                try:
+                    _env.update(job.body["env"])
+                except KeyError:
+                    pass
+
                 workdir = gitjobdir.get(repo, commit, exclusive or str(n))
                 if not workdir:
                     job.nack()
                     print("worker %2i: cannot get job dir, requeueing job" % n)
                     continue
 
-                handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True)
+                handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env)
                 output, result = handle.wait()
 
                 if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):

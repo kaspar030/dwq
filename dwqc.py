@@ -2,6 +2,7 @@
 
 import json
 import random
+import os
 import sys
 import time
 import argparse
@@ -34,11 +35,17 @@ def parse_args():
     parser = argparse.ArgumentParser(prog='dwqc', description='dwq: disque-based work queue')
 
     parser.add_argument('-q', '--queue', type=str,
-            help='queue name for jobs (default: \"default\")', default="default")
+            help='queue name for jobs (default: \"default\")',
+            default=os.environ.get("DWQ_QUEUE") or "default")
+
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
-    parser.add_argument('-r', "--repo", help='git repository to work on', type=str, required=True)
-    parser.add_argument('-c', "--commit", help='git commit to work on', type=str, required=True)
+    parser.add_argument('-r', "--repo", help='git repository to work on', type=str,
+            required="DWQ_REPO" not in os.environ, default=os.environ.get("DWQ_REPO"))
+
+    parser.add_argument('-c', "--commit", help='git commit to work on', type=str,
+            required="DWQ_COMMIT" not in os.environ, default=os.environ.get("DWQ_COMMIT"))
+
     parser.add_argument('-v', "--verbose", help='enable status output', action="store_true" )
     parser.add_argument('-P', "--progress", help='enable progress output', action="store_true" )
     parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
@@ -46,15 +53,33 @@ def parse_args():
     parser.add_argument('-o', "--outfile", help='write job results to file', type=argparse.FileType('w'))
     parser.add_argument('-b', "--batch", help='send all jobs together', action="store_true")
     parser.add_argument('-e', "--exclusive-jobdir", help='don\'t share jobdirs between jobs', action="store_true")
+    parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append")
 
     parser.add_argument('command', type=str, nargs='?')
 
     return parser.parse_args()
 
-def create_body(repo, commit, command, options=None):
-    body = { "repo" : repo, "commit" : commit, "command" : command }
+def get_env(env):
+    result = {}
+    for var in env:
+        var = var.split("=", maxsplit=1)
+        if len(var) == 1:
+            val = os.environ.get(var[0])
+            if val:
+                var.append(val)
+            else:
+                continue
+        result[var[0]] = var[1]
+
+    return result
+
+def create_body(args, command, options=None):
+    body = { "repo" : args.repo, "commit" : args.commit, "command" : command }
     if options:
         body["options"] = options
+
+    if args.env:
+        body["env"] = get_env(args.env)
 
     return body
 
@@ -89,7 +114,7 @@ def main():
         jobs = set()
         batch = []
         if args.command and not args.stdin:
-            queue_job(jobs, job_queue, create_body(args.repo, args.commit, args.command), [status_queue])
+            queue_job(jobs, job_queue, create_body(args, args.command), [status_queue])
             result = Job.wait(status_queue)[0]
             print(result["result"]["output"], end="")
             sys.exit(result["result"]["status"])
@@ -116,9 +141,9 @@ def main():
                     options.update({ "jobdir" : "exclusive" })
 
                 if args.batch:
-                    batch.append((job_queue, create_body(args.repo, args.commit, command, options), [status_queue]))
+                    batch.append((job_queue, create_body(args, command, options), [status_queue]))
                 else:
-                    job_id = queue_job(jobs, job_queue, create_body(args.repo, args.commit, command, options), [status_queue])
+                    job_id = queue_job(jobs, job_queue, create_body(args, command, options), [status_queue])
                     vprint("dwqc: job %s command=\"%s\" sent." % (job_id, command))
                     if args.progress:
                         print("")
