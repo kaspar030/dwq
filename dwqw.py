@@ -66,7 +66,7 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 output, result = handle.wait()
 
                 if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
-                    print("worker %2i: result:", result, "nacks:", job.nacks, "re-queueing.")
+                    print("worker %2i: result:" % n, result, "nacks:", job.nacks, "re-queueing.")
                     job.nack()
                 else:
                     runtime = time.time() - before
@@ -75,7 +75,7 @@ def worker(n, cmd_server_pool, gitjobdir, args):
                 gitjobdir.release(workdir)
 
     except Exception as e:
-        print("worker %2i: uncaught exception")
+        print("worker %2i: uncaught exception" % n)
         traceback.print_exc()
         time.sleep(10)
 

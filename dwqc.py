@@ -44,6 +44,8 @@ def parse_args():
     parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
     parser.add_argument('-Q', "--quiet", help='don\'t print command output', action="store_true" )
     parser.add_argument('-o', "--outfile", help='write job results to file', type=argparse.FileType('w'))
+    parser.add_argument('-b', "--batch", help='send all jobs together', action="store_true")
+    parser.add_argument('-e', "--exclusive-jobdir", help='don\'t share jobdirs between jobs', action="store_true")
 
     parser.add_argument('command', type=str, nargs='?')
 
@@ -59,6 +61,7 @@ def create_body(repo, commit, command, options=None):
 def queue_job(jobs_set, queue, body, status_queues):
     job_id = Job.add(queue, body, status_queues)
     jobs_set.add(job_id)
+    return job_id
 
 def vprint(*args, **kwargs):
     global verbose
@@ -68,6 +71,7 @@ def vprint(*args, **kwargs):
 verbose = False
 
 def main():
+    global verbose
     args = parse_args()
 
     job_queue = args.queue
@@ -83,16 +87,22 @@ def main():
     result_list = []
     try:
         jobs = set()
+        batch = []
         if args.command and not args.stdin:
             queue_job(jobs, job_queue, create_body(args.repo, args.commit, args.command), [status_queue])
-            result = Job.wait(status_queue)
+            result = Job.wait(status_queue)[0]
             print(result["result"]["output"], end="")
             sys.exit(result["result"]["status"])
         else:
+            jobs_read = 0
+            vprint("dwqc: reading jobs from stdin")
             for line in sys.stdin:
                 line = line.rstrip()
                 if args.stdin:
-                    command = args.command.replace("${1}", line)
+                    cmdargs = line.split(" ")
+                    command = args.command
+                    for i in range(0, len(cmdargs)):
+                        command = command.replace("${%i}" % (i+1), cmdargs[i])
                 else:
                     command = line
 
@@ -102,42 +112,68 @@ def main():
                 if len(tmp) > 1:
                     options = json.loads(tmp[1])
 
-                job_id = queue_job(jobs, job_queue, create_body(args.repo, args.commit, command, options), [status_queue])
-                vprint("client: job %s command=\"%s\" sent." % (job_id, command))
+                if args.exclusive_jobdir:
+                    options.update({ "jobdir" : "exclusive" })
+
+                if args.batch:
+                    batch.append((job_queue, create_body(args.repo, args.commit, command, options), [status_queue]))
+                else:
+                    job_id = queue_job(jobs, job_queue, create_body(args.repo, args.commit, command, options), [status_queue])
+                    vprint("dwqc: job %s command=\"%s\" sent." % (job_id, command))
+                    if args.progress:
+                        print("")
+
+                if args.progress:
+                    jobs_read += 1
+                    elapsed = time.time() - start_time
+                    print("\033[F\033[K[%s] %s jobs read" \
+                            % (nicetime(elapsed), jobs_read), end="\r")
+
+        _time = ""
+        if args.batch:
+            before = time.time()
+            vprint("dwqc: sending jobs")
+            for _tuple in batch:
+                queue_job(jobs, *_tuple)
+            _time = "(took %s)" % nicetime(time.time() - before)
+        vprint("dwqc: all jobs sent.", _time)
+
+        if args.progress:
+            vprint("")
 
         total = len(jobs)
         done = 0
         failed = 0
         passed = 0
         while jobs:
-            job = Job.wait(status_queue)
-            try:
-                jobs.remove(job["job_id"])
-                done += 1
-                if args.progress:
-                    vprint("\033[F\033[K", end="")
-                vprint("client: job %s done. result=%s" % (job["job_id"], job["result"]["status"]), end="\n\n")
-                if not args.quiet:
-                    print(job["result"]["output"], end="")
-                if job["result"]["status"] in { 0, "0", "pass" }:
-                    passed += 1
-                else:
-                    failed += 1
-                if args.outfile:
-                    result_list.append(job)
-            except KeyError:
-                vprint("client: ignoring unknown job result from id=%s" % job["job_id"])
-            finally:
-                if args.progress:
-                    print("")
+            for job in Job.wait(status_queue, count=16):
+                try:
+                    jobs.remove(job["job_id"])
+                    done += 1
+                    #if args.progress:
+                    #    vprint("\033[F\033[K", end="")
+                    #vprint("dwqc: job %s done. result=%s" % (job["job_id"], job["result"]["status"]))
+                    if not args.quiet:
+                        print(job["result"]["output"], end="")
+                    if job["result"]["status"] in { 0, "0", "pass" }:
+                        passed += 1
+                    else:
+                        failed += 1
+                    if args.outfile:
+                        result_list.append(job)
+                except KeyError:
+                    vprint("dwqc: ignoring unknown job result from id=%s" % job["job_id"])
+                finally:
+                    if args.progress:
+                        print("")
 
-            if args.progress:
-                elapsed = time.time() - start_time
-                per_job = elapsed / done
-                eta = (total - done) * per_job
+                if args.progress:
+                    elapsed = time.time() - start_time
+                    per_job = elapsed / done
+                    eta = (total - done) * per_job
 
-                print("\033[F\033[Kclient: %s of %s jobs done (%s passed, %s failed.) " \
-                        "ETA: " % (done, total, passed, failed), nicetime(eta), end="\r")
+                    print("\033[F\033[K[%s] %s/%s jobs done (%s passed, %s failed.) " \
+                            "ETA:" % (nicetime(elapsed), done, total, passed, failed), nicetime(eta), end="\r")
 
         if args.outfile:
             args.outfile.write(json.dumps(result_list))
@@ -145,5 +181,6 @@ def main():
         if failed > 0:
             sys.exit(1)
     except KeyboardInterrupt:
+        print("dwqc: cancelling...")
         Job.cancel_all(jobs)
         sys.exit(1)

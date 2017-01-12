@@ -54,16 +54,16 @@ class Job(object):
     def cancel(s):
         disque.del_job(s.job_id)
 
-    def wait(queue):
-        _jobs = disque.get_job([queue])
+    def wait(queue, count=None):
+        _jobs = disque.get_job([queue], count=count)
+        jobs = []
         for queue_name, job_id, json_body in _jobs:
             queue_name = queue_name.decode("ascii")
             job_id = job_id.decode("ascii")
             body = json.loads(json_body.decode("utf-8"))
             disque.fast_ack(job_id)
-            return body
+            jobs.append(body)
+        return jobs
 
     def cancel_all(job_ids):
-        for job_id in job_ids:
-            disque.del_job(job_id)
-
+        disque.del_job(*tuple(job_ids))
