@@ -9,6 +9,18 @@ class Disque(object):
         disque = Client(servers)
         disque.connect()
 
+    def get():
+        global disque
+        return disque
+
+    def connected():
+        global disque
+        if not disque:
+            return False
+        if not disque.connected_node:
+            return False
+        return True
+
 class Job(object):
     def __init__(s, job_id, body, queue_name, nacks, additional_deliveries):
         s.job_id = job_id
