@@ -3,11 +3,18 @@
 import json
 import random
 import os
+import signal
 import sys
 import time
 import argparse
 
 from dwq import Job, Disque
+
+class GracefulExit(Exception):
+    pass
+
+def sigterm_handler(signal, stack_frame):
+    raise GracefulExit()
 
 def nicetime(time):
     secs = round(time)
@@ -99,6 +106,8 @@ def main():
     global verbose
     args = parse_args()
 
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
     job_queue = args.queue
 
     Disque.connect(["localhost:7711"])
@@ -171,7 +180,7 @@ def main():
         failed = 0
         passed = 0
         while jobs:
-            for job in Job.wait(status_queue, count=16):
+            for job in Job.wait(status_queue, count=128):
                 try:
                     jobs.remove(job["job_id"])
                     done += 1
@@ -203,9 +212,12 @@ def main():
         if args.outfile:
             args.outfile.write(json.dumps(result_list))
 
+        if args.progress:
+            print("")
+
         if failed > 0:
             sys.exit(1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, GracefulExit):
         print("dwqc: cancelling...")
         Job.cancel_all(jobs)
         sys.exit(1)
