@@ -50,9 +50,13 @@ class GitJobDir(object):
                         return None
                 try:
                     s.dirs_left -= 1
-                    s.lock.release()
-                    s.checkout(repo, commit, extra)
-                    s.lock.acquire()
+                    try:
+                        s.lock.release()
+                        s.checkout(repo, commit, extra, **kwargs)
+                        s.lock.acquire()
+                    except Exception as e:
+                        s.lock.acquire()
+                        raise e
                 except subprocess.CalledProcessError:
                     return None
             else:
