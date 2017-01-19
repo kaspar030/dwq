@@ -9,10 +9,14 @@
 #
 
 from multiprocessing import Process, Queue
+from queue import Empty
 from subprocess import Popen, PIPE, STDOUT
 import signal
 from collections import deque
 import os
+
+class CmdTimeout(Exception):
+    pass
 
 class CmdHandle(object):
     def __init__(s, queue, pid, pool, server):
@@ -20,18 +24,30 @@ class CmdHandle(object):
         s.pid = pid
         s.pool = pool
         s.server = server
+        s.timeout = False
 
-    def wait(s):
-        res = s.queue.get()
+    def wait(s, timeout=None):
+        try:
+            res = s.queue.get(timeout=timeout)
+        except Empty:
+            s.timeout = True
+            return s.kill()
+
         s.pool.append(s.server)
         return res
 
     def kill(s, signal=signal.SIGKILL):
-        os.kill(-s.pid, signal)
+        try:
+            os.kill(-s.pid, signal)
+        except:
+            pass
         return s.wait()
 
     def killpg(s, signal=signal.SIGKILL):
-        os.killpg(os.getpgid(s.pid), signal)
+        try:
+            os.killpg(os.getpgid(s.pid), signal)
+        except:
+            pass
         return s.wait()
 
 class CmdServer(object):
