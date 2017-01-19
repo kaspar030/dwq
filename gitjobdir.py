@@ -114,7 +114,10 @@ class GitJobDir(object):
     def cleanup(s):
         with s.lock:
             for _dir, v in s.use_counts.items():
-                s.clean_dir(_dir, True)
+                try:
+                    s.clean_dir(_dir, True)
+                except FileNotFoundError:
+                    pass
 
 if __name__=="__main__":
     gjd = GitJobDir("/tmp/gitjobdir", maxdirs=1)
