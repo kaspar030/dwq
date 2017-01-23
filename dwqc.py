@@ -45,7 +45,6 @@ def parse_args():
             help='queue name for jobs (default: \"default\")',
             default=os.environ.get("DWQ_QUEUE") or "default")
 
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
     parser.add_argument('-r', "--repo", help='git repository to work on', type=str,
             required="DWQ_REPO" not in os.environ, default=os.environ.get("DWQ_REPO"))
@@ -53,14 +52,17 @@ def parse_args():
     parser.add_argument('-c', "--commit", help='git commit to work on', type=str,
             required="DWQ_COMMIT" not in os.environ, default=os.environ.get("DWQ_COMMIT"))
 
-    parser.add_argument('-v', "--verbose", help='enable status output', action="store_true" )
+    parser.add_argument('-e', "--exclusive-jobdir", help='don\'t share jobdirs between jobs', action="store_true")
+
     parser.add_argument('-P', "--progress", help='enable progress output', action="store_true" )
-    parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
+    parser.add_argument('-v', "--verbose", help='enable status output', action="store_true" )
     parser.add_argument('-Q', "--quiet", help='don\'t print command output', action="store_true" )
+    parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
     parser.add_argument('-o', "--outfile", help='write job results to file', type=argparse.FileType('w'))
     parser.add_argument('-b', "--batch", help='send all jobs together', action="store_true")
-    parser.add_argument('-e', "--exclusive-jobdir", help='don\'t share jobdirs between jobs', action="store_true")
     parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append")
+
+    parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
     parser.add_argument('command', type=str, nargs='?')
 
@@ -123,7 +125,10 @@ def main():
         jobs = set()
         batch = []
         if args.command and not args.stdin:
-            queue_job(jobs, job_queue, create_body(args, args.command), [status_queue])
+            options = {}
+            if args.exclusive_jobdir:
+                options.update({ "jobdir" : "exclusive" })
+            queue_job(jobs, job_queue, create_body(args, args.command, options), [status_queue])
             result = Job.wait(status_queue)[0]
             print(result["result"]["output"], end="")
             sys.exit(result["result"]["status"])
