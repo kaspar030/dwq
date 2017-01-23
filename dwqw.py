@@ -69,6 +69,8 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         job.done({ "status" : "error", "output" : "worker.py: invalid job description" })
                         continue
 
+                    print("worker %2i: command=\"%s\"" % (n, command))
+
                     exclusive = None
                     try:
                         options = job.body.get("options") or {}
@@ -84,10 +86,16 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     except KeyError:
                         pass
 
-                    workdir = gitjobdir.get(repo, commit, exclusive or str(n))
+                    workdir = gitjobdir.get(repo, commit, exclusive=exclusive or str(n))
                     if not workdir:
-                        job.nack()
-                        print("worker %2i: cannot get job dir, requeueing job" % n)
+                        if job.nacks < (options.get("max_retries") or 2):
+                            job.nack()
+                            print("worker %2i: cannot get job dir, requeueing job" % n)
+                        else:
+                            job.done({ "status" : "error", "output" : "dwqw: error getting jobdir\n",
+                                        "worker" : args.name, "runtime" : 0, "body" : job.body })
+                            print("worker %2i: cannot get job dir, erroring job" % n)
+                        working_set.discard(job.job_id)
                         continue
 
                     handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env)
@@ -96,12 +104,14 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         result = "timeout"
 
                     if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
-                        print("worker %2i: result:" % n, result, "nacks:", job.nacks, "re-queueing.")
+                        print("worker %2i: command:" % n, command,
+                                "result:", result, "nacks:", job.nacks, "re-queueing.")
                         job.nack()
                     else:
                         runtime = time.time() - before
                         job.done({ "status" : result, "output" : output, "worker" : args.name, "runtime" : runtime, "body" : job.body })
-                        print("worker %2i: result:" % n, result, "runtime: %.1fs" % runtime)
+                        print("worker %2i: command:" % n, command,
+                                "result:", result, "runtime: %.1fs" % runtime)
                         working_set.discard(job.job_id)
                     gitjobdir.release(workdir)
 
@@ -136,9 +146,9 @@ def main():
 
     args = parse_args()
 
-    signal.signal(signal.SIGTERM, sigterm_handler)
-
     cmd_server_pool = cmdserver.CmdServerPool(args.jobs)
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
 
     _dir = "/tmp/dwq.%s" % str(random.random())
     gitjobdir = GitJobDir(_dir, args.jobs)
