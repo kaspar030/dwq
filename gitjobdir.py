@@ -30,17 +30,17 @@ class GitJobDir(object):
         except FileExistsError:
             pass
 
-    def dirkey(repo, commit, extra=None):
-        _str = "%s::%s::%s" % (repo, commit, extra or "")
+    def dirkey(repo, commit, **kwargs):
+        _str = "%s::%s::%s" % (repo, commit, hash(frozenset(kwargs.items())))
         return hashlib.md5(_str.encode("utf-8")).hexdigest()
 
     def path(s, dirkey):
         return os.path.join(s.basedir, dirkey)
 
-    def get(s, repo, commit, extra=None):
+    def get(s, repo, commit, **kwargs):
         with s.lock:
 
-            _dir = s.path(GitJobDir.dirkey(repo, commit, extra))
+            _dir = s.path(GitJobDir.dirkey(repo, commit, **kwargs))
 
             if dictadd(s.use_counts, _dir, ret_post=False) == None:
                 if s.dirs_left == 0:
@@ -49,15 +49,16 @@ class GitJobDir(object):
                         print("gitjobdir: could not get free jobdir slot")
                         return None
                 try:
-                    s.dirs_left -= 1
                     try:
+                        s.dirs_left -= 1
                         s.lock.release()
-                        s.checkout(repo, commit, extra, **kwargs)
+                        s.checkout(repo, commit, **kwargs)
                         s.lock.acquire()
                     except Exception as e:
                         s.lock.acquire()
                         raise e
                 except subprocess.CalledProcessError:
+                    s.dirs_left += 1
                     return None
             else:
                 lock = s.unused.pop(_dir, None)
@@ -81,7 +82,7 @@ class GitJobDir(object):
                 print("GitJobDir: warning: release() on unused job dir!")
             else:
                 if dictadd(s.use_counts, _dir, -1) == 0:
-                    print("GitJobDir: last user of %s gone." % _dir)
+                    #print("GitJobDir: last user of %s gone." % _dir)
                     s.clean_deferred(_dir)
 
     def clean_dir(s, _dir, delete_only=False):
@@ -100,15 +101,15 @@ class GitJobDir(object):
         threading.Thread(target=GitJobDir.clean_deferred_handler, args=(s, _dir, lock)).start()
 
     def clean_deferred_handler(s, _dir, lock):
-        print("clean_deferred_handler() waiting for", _dir)
+        #print("clean_deferred_handler() waiting for", _dir)
         lock.acquire(timeout=s.deferred_clean_delay)
         with s.lock:
             if s.unused.get(_dir) is lock:
-                print("clean_deferred_handler() triggered for", _dir)
+                #print("clean_deferred_handler() triggered for", _dir)
                 s.clean_dir(_dir)
 
-    def checkout(s, repo, commit, extra):
-        target_path = s.path(GitJobDir.dirkey(repo, commit, extra))
+    def checkout(s, repo, commit, **kwargs):
+        target_path = s.path(GitJobDir.dirkey(repo, commit, **kwargs))
         subprocess.check_call(["git", "cache", "clone", repo, commit, target_path])
 
     def cleanup(s):
