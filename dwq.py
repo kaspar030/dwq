@@ -21,6 +21,34 @@ class Disque(object):
             return False
         return True
 
+    def qstat(*args):
+        global disque
+
+        n, queues = disque.qscan(*args)
+
+        active = []
+        queue_dict = {}
+
+        for queue in queues:
+            queue = queue.decode('ascii')
+            qstat_list = disque.qstat(queue)
+            qstat = {}
+            name = None
+            while len(qstat_list):
+                key = qstat_list[0].decode('ascii')
+                val = qstat_list[1]
+                qstat_list = qstat_list[2:]
+                if isinstance(val, bytes):
+                    val = val.decode('ascii')
+                if key != 'name':
+                    qstat[key] = val
+                else:
+                    name = val
+            if name:
+                queue_dict[name] = qstat
+
+        return queue_dict
+
 class Job(object):
     def __init__(s, job_id, body, queue_name, nacks, additional_deliveries):
         s.job_id = job_id
