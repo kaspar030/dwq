@@ -44,7 +44,7 @@ shutdown = False
 def worker(n, cmd_server_pool, gitjobdir, args, working_set):
     global shutdown
     print("worker %2i: started" % n)
-
+    buildnum = 0
     while not shutdown:
         try:
             if not Disque.connected():
@@ -56,6 +56,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     if shutdown:
                         job.nack()
                         continue
+                    buildnum += 1
                     working_set.add(job.job_id)
                     before = time.time()
                     print("worker %2i: got job %s from queue %s" % (n, job.job_id, job.queue_name))
@@ -80,7 +81,8 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         pass
 
                     _env = os.environ.copy()
-                    _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name })
+                    _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name,
+                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : buildnum })
                     try:
                         _env.update(job.body["env"])
                     except KeyError:
@@ -90,7 +92,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     if not workdir:
                         if job.nacks < (options.get("max_retries") or 2):
                             job.nack()
-                            print("worker %2i: cannot get job dir, requeueing job" % n)
+                            print("worker %2i: error getting job dir, requeueing job" % n)
                         else:
                             job.done({ "status" : "error", "output" : "dwqw: error getting jobdir\n",
                                         "worker" : args.name, "runtime" : 0, "body" : job.body })
