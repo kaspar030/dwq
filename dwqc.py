@@ -10,11 +10,8 @@ import argparse
 
 from dwq import Job, Disque
 
-class GracefulExit(Exception):
-    pass
-
 def sigterm_handler(signal, stack_frame):
-    raise GracefulExit()
+    raise SystemExit()
 
 def nicetime(time):
     secs = round(time)
@@ -222,7 +219,7 @@ def main():
 
         if failed > 0:
             sys.exit(1)
-    except (KeyboardInterrupt, GracefulExit):
+    except (KeyboardInterrupt, SystemExit):
         print("dwqc: cancelling...")
         Job.cancel_all(jobs)
         sys.exit(1)

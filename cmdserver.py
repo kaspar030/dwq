@@ -58,16 +58,19 @@ class CmdServer(object):
         s.cmdHostProcess.start()
 
     def cmdloop(s, inQueue, outQueue, pool):
-        while True:
-            args, kwargs = inQueue.get()
-            kwargs["stderr"] = STDOUT
-            kwargs["stdout"] = PIPE
-            process = Popen(*args, **kwargs)
-            outQueue.put(process.pid)
-            output = u""
-            with process:
-                output += process.stdout.read().decode("utf-8", "replace")
-            outQueue.put((output, process.returncode))
+        try:
+            while True:
+                args, kwargs = inQueue.get()
+                kwargs["stderr"] = STDOUT
+                kwargs["stdout"] = PIPE
+                process = Popen(*args, **kwargs)
+                outQueue.put(process.pid)
+                output = u""
+                with process:
+                    output += process.stdout.read().decode("utf-8", "replace")
+                outQueue.put((output, process.returncode))
+        except (KeyboardInterrupt, SystemExit):
+            pass
 
     def runcmd(s, *args, **kwargs):
         s.inQueue.put((args, kwargs))

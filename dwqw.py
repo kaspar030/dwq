@@ -18,11 +18,8 @@ from dwq import Job, Disque
 
 from gitjobdir import GitJobDir
 
-class GracefulExit(Exception):
-    pass
-
 def sigterm_handler(signal, stack_frame):
-    raise GracefulExit()
+    raise SystemExit()
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='dwqw', description='dwq: disque-based work queue (worker)')
@@ -82,7 +79,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                     _env = os.environ.copy()
                     _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name,
-                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : buildnum })
+                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : str(buildnum) })
                     try:
                         _env.update(job.body["env"])
                     except KeyError:
@@ -177,7 +174,7 @@ def main():
                 except RedisError:
                     pass
             time.sleep(1)
-    except (KeyboardInterrupt, GracefulExit):
+    except (KeyboardInterrupt, SystemExit):
         print("dwqw: signal caught, shutting down")
         shutdown = True
         cmd_server_pool.destroy()
