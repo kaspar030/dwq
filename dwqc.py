@@ -128,7 +128,7 @@ def main():
             queue_job(jobs, job_queue, create_body(args, args.command, options), [status_queue])
             result = Job.wait(status_queue)[0]
             print(result["result"]["output"], end="")
-            sys.exit(result["result"]["status"])
+            return(result["result"]["status"])
         else:
             jobs_read = 0
             vprint("dwqc: reading jobs from stdin")
@@ -217,9 +217,10 @@ def main():
         if args.progress:
             print("")
 
-        if failed > 0:
-            sys.exit(1)
     except (KeyboardInterrupt, SystemExit):
         print("dwqc: cancelling...")
         Job.cancel_all(jobs)
+        sys.exit(1)
+
+    if failed > 0:
         sys.exit(1)
