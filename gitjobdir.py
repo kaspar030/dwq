@@ -57,9 +57,9 @@ class GitJobDir(object):
                     except Exception as e:
                         s.lock.acquire()
                         raise e
-                except subprocess.CalledProcessError:
+                except subprocess.CalledProcessError as e:
                     s.dirs_left += 1
-                    return None
+                    raise e
             else:
                 lock = s.unused.pop(_dir, None)
                 if lock:
@@ -110,7 +110,8 @@ class GitJobDir(object):
 
     def checkout(s, repo, commit, **kwargs):
         target_path = s.path(GitJobDir.dirkey(repo, commit, **kwargs))
-        subprocess.check_call(["git", "cache", "clone", repo, commit, target_path])
+        subprocess.check_output(["git", "cache", "clone", repo, commit, target_path],
+                                stderr=subprocess.STDOUT)
 
     def cleanup(s):
         with s.lock:
