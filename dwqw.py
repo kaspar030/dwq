@@ -128,7 +128,6 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
             time.sleep(10)
             vprint(1, "worker %2i: restarting worker" % n)
 
-
 class SyncSet(object):
     def __init__(s):
         s.set = set()
@@ -187,7 +186,7 @@ def main():
                 try:
                     vprint(1, "dwqw: connecting...")
                     Disque.connect(servers)
-                    print("dwqw: connected.")
+                    vprint(1, "dwqw: connected.")
                 except RedisError:
                     pass
             time.sleep(1)
