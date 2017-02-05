@@ -81,7 +81,8 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                     _env = os.environ.copy()
                     _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name,
-                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : str(buildnum) })
+                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : str(buildnum),
+                                  "DWQ_WORKER_THREAD" : str(n)})
                     try:
                         _env.update(job.body["env"])
                     except KeyError:
