@@ -89,8 +89,8 @@ def create_body(args, command, options=None):
 
     return body
 
-def queue_job(jobs_set, queue, body, status_queues):
-    job_id = Job.add(queue, body, status_queues)
+def queue_job(jobs_set, queue, body, control_queues):
+    job_id = Job.add(queue, body, control_queues)
     jobs_set.add(job_id)
     return job_id
 
@@ -111,7 +111,8 @@ def main():
 
     Disque.connect(["localhost:7711"])
 
-    status_queue = "status_%s" % random.random()
+    control_queue = "status_%s" % random.random()
+    args.env.append("DWQ_CONTROL_QUEUE=%s" % control_queue)
     verbose = args.verbose
 
     if args.progress:
@@ -125,8 +126,8 @@ def main():
             options = {}
             if args.exclusive_jobdir:
                 options.update({ "jobdir" : "exclusive" })
-            queue_job(jobs, job_queue, create_body(args, args.command, options), [status_queue])
-            result = Job.wait(status_queue)[0]
+            queue_job(jobs, job_queue, create_body(args, args.command, options), [control_queue])
+            result = Job.wait(control_queue)[0]
             print(result["result"]["output"], end="")
             return(result["result"]["status"])
         else:
@@ -152,9 +153,9 @@ def main():
                     options.update({ "jobdir" : "exclusive" })
 
                 if args.batch:
-                    batch.append((job_queue, create_body(args, command, options), [status_queue]))
+                    batch.append((job_queue, create_body(args, command, options), [control_queue]))
                 else:
-                    job_id = queue_job(jobs, job_queue, create_body(args, command, options), [status_queue])
+                    job_id = queue_job(jobs, job_queue, create_body(args, command, options), [control_queue])
                     vprint("dwqc: job %s command=\"%s\" sent." % (job_id, command))
                     if args.progress:
                         print("")
@@ -182,7 +183,7 @@ def main():
         failed = 0
         passed = 0
         while jobs:
-            for job in Job.wait(status_queue, count=128):
+            for job in Job.wait(control_queue, count=128):
                 try:
                     jobs.remove(job["job_id"])
                     done += 1
