@@ -75,15 +75,17 @@ class Job(object):
         disque.working(s.job_id)
 
     def done(s, result):
-        for queue in s.control_queues:
-            if queue=="$jobid":
-                queue = s.job_id
-            disque.add_job(queue, json.dumps({"job_id" : s.job_id, "state" : "done", "result" : result }))
+        if s.control_queues:
+            for queue in s.control_queues:
+                if queue=="$jobid":
+                    queue = s.job_id
+                disque.add_job(queue, json.dumps({"job_id" : s.job_id, "state" : "done", "result" : result }))
 
         disque.ack_job(s.job_id)
 
     def add(queue, body, control_queues=None, **kwargs):
-        body["control_queues"] = control_queues or []
+        if control_queues:
+            body["control_queues"] = control_queues
 
         json_body = json.dumps(body)
         return disque.add_job(queue, json_body, **kwargs).decode("ascii")

@@ -57,7 +57,8 @@ def parse_args():
     parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
     parser.add_argument('-o', "--outfile", help='write job results to file', type=argparse.FileType('w'))
     parser.add_argument('-b', "--batch", help='send all jobs together', action="store_true")
-    parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append")
+    parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append", default=[])
+    parser.add_argument('-S', "--subjob", help='pass job(s) to master instance, don\'t wait for completion', action="store_true")
 
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
@@ -79,10 +80,13 @@ def get_env(env):
 
     return result
 
-def create_body(args, command, options=None):
+def create_body(args, command, options=None, parent_id=None):
     body = { "repo" : args.repo, "commit" : args.commit, "command" : command }
     if options:
         body["options"] = options
+
+    if parent_id:
+        body["parent"] = parent_id
 
     if args.env:
         body["env"] = get_env(args.env)
@@ -91,7 +95,15 @@ def create_body(args, command, options=None):
 
 def queue_job(jobs_set, queue, body, control_queues):
     job_id = Job.add(queue, body, control_queues)
-    jobs_set.add(job_id)
+
+    parent = body.get('parent')
+    if parent:
+        body = { 'parent' : parent, 'subjob' : job_id, 'unique' : os.environ.get("DWQ_JOB_UNIQUE") }
+        Job.add(control_queues[0], body, None)
+
+    else:
+        jobs_set.add(job_id)
+
     return job_id
 
 def vprint(*args, **kwargs):
@@ -100,6 +112,20 @@ def vprint(*args, **kwargs):
         print(*args, **kwargs)
 
 verbose = False
+
+def dict_addset(_dict, key, data):
+    try:
+        _dict[key].add(data)
+    except KeyError:
+        _dict[key] = {data}
+
+def dict_dictadd(_dict, key):
+    try:
+        return _dict[key]
+    except KeyError:
+        _tmp = {}
+        _dict[key] = _tmp
+        return _tmp
 
 def main():
     global verbose
@@ -111,8 +137,23 @@ def main():
 
     Disque.connect(["localhost:7711"])
 
-    control_queue = "status_%s" % random.random()
-    args.env.append("DWQ_CONTROL_QUEUE=%s" % control_queue)
+    if args.subjob:
+        try:
+            control_queue = os.environ["DWQ_CONTROL_QUEUE"]
+        except KeyError:
+            print("dwqc: error: --subjob specified, but DWQ_CONTROL_QUEUE unset.")
+            sys.exit(1)
+
+        try:
+            parent_jobid = os.environ["DWQ_JOBID"]
+        except KeyError:
+            print("dwqc: error: --subjob specified, but DWQ_JOBID unset.")
+            sys.exit(1)
+
+    else:
+        control_queue = "control::%s" % random.random()
+        parent_jobid = None
+
     verbose = args.verbose
 
     if args.progress:
@@ -126,10 +167,7 @@ def main():
             options = {}
             if args.exclusive_jobdir:
                 options.update({ "jobdir" : "exclusive" })
-            queue_job(jobs, job_queue, create_body(args, args.command, options), [control_queue])
-            result = Job.wait(control_queue)[0]
-            print(result["result"]["output"], end="")
-            return(result["result"]["status"])
+            queue_job(jobs, job_queue, create_body(args, args.command, options, parent_jobid), [control_queue])
         else:
             jobs_read = 0
             vprint("dwqc: reading jobs from stdin")
@@ -153,9 +191,9 @@ def main():
                     options.update({ "jobdir" : "exclusive" })
 
                 if args.batch:
-                    batch.append((job_queue, create_body(args, command, options), [control_queue]))
+                    batch.append((job_queue, create_body(args, command, options, parent_jobid), [control_queue]))
                 else:
-                    job_id = queue_job(jobs, job_queue, create_body(args, command, options), [control_queue])
+                    job_id = queue_job(jobs, job_queue, create_body(args, command, options, parent_jobid), [control_queue])
                     vprint("dwqc: job %s command=\"%s\" sent." % (job_id, command))
                     if args.progress:
                         print("")
@@ -167,42 +205,78 @@ def main():
                             % (nicetime(elapsed), jobs_read), end="\r")
 
         _time = ""
-        if args.batch:
+        if args.batch and args.stdin:
             before = time.time()
             vprint("dwqc: sending jobs")
             for _tuple in batch:
                 queue_job(jobs, *_tuple)
             _time = "(took %s)" % nicetime(time.time() - before)
-        vprint("dwqc: all jobs sent.", _time)
+
+        if args.stdin:
+            vprint("dwqc: all jobs sent.", _time)
+
+        if args.subjob:
+            return
 
         if args.progress:
             vprint("")
 
+        unexpected = {}
+        early_subjobs = []
         total = len(jobs)
         done = 0
         failed = 0
         passed = 0
+        subjobs = {}
         while jobs:
-            for job in Job.wait(control_queue, count=128):
-                try:
-                    jobs.remove(job["job_id"])
-                    done += 1
-                    #if args.progress:
-                    #    vprint("\033[F\033[K", end="")
-                    #vprint("dwqc: job %s done. result=%s" % (job["job_id"], job["result"]["status"]))
-                    if not args.quiet:
-                        print(job["result"]["output"], end="")
-                    if job["result"]["status"] in { 0, "0", "pass" }:
-                        passed += 1
-                    else:
-                        failed += 1
-                    if args.outfile:
-                        result_list.append(job)
-                except KeyError:
-                    vprint("dwqc: ignoring unknown job result from id=%s" % job["job_id"])
-                finally:
-                    if args.progress:
-                        print("")
+            _early_subjobs = early_subjobs or None
+            early_subjobs = []
+
+            for job in _early_subjobs or Job.wait(control_queue, count=128):
+                #print(json.dumps(job, sort_keys=True, indent=4))
+                subjob = job.get("subjob")
+                if subjob:
+                    parent = job.get("parent")
+                    unique = job.get("unique")
+
+                    _dict = dict_dictadd(subjobs, parent)
+                    dict_addset(_dict, unique, subjob)
+
+                else:
+                    try:
+                        job_id = job["job_id"]
+                        jobs.remove(job_id)
+                        done += 1
+                        #if args.progress:
+                        #    vprint("\033[F\033[K", end="")
+                        #vprint("dwqc: job %s done. result=%s" % (job["job_id"], job["result"]["status"]))
+                        if not args.quiet:
+                            print(job["result"]["output"], end="")
+                        if job["result"]["status"] in { 0, "0", "pass" }:
+                            passed += 1
+                        else:
+                            failed += 1
+                        if args.outfile:
+                            result_list.append(job)
+
+                        # collect subjobs started by this job instance, add to waitlist
+                        unique = job["result"]["unique"]
+                        _subjobs = subjobs.get(job_id, {}).get(unique, [])
+                        for subjob_id in _subjobs:
+                            try:
+                                early_subjobs.append(unexpected.pop(subjob_id))
+                            except KeyError:
+                                pass
+                            finally:
+                                jobs.add(subjob_id)
+
+                        total += len(_subjobs)
+
+                    except KeyError:
+                        unexpected[job_id] = job
+                    finally:
+                        if args.progress:
+                            print("")
 
                 if args.progress:
                     elapsed = time.time() - start_time

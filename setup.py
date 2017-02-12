@@ -13,7 +13,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='dwq',
-    version='0.0.30',
+    version='0.0.32',
 
     description='dwq: a Disque based work queue',
     long_description=long_description,

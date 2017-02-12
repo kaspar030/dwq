@@ -79,14 +79,19 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     except KeyError:
                         pass
 
+                    unique = random.random()
+
                     _env = os.environ.copy()
-                    _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name,
-                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : str(buildnum),
-                                  "DWQ_WORKER_THREAD" : str(n)})
+
                     try:
                         _env.update(job.body["env"])
                     except KeyError:
                         pass
+
+                    _env.update({ "DWQ_REPO" : repo, "DWQ_COMMIT" : commit, "DWQ_QUEUE" : job.queue_name,
+                                  "DWQ_WORKER" : args.name, "DWQ_WORKER_BUILDNUM" : str(buildnum),
+                                  "DWQ_WORKER_THREAD" : str(n), "DWQ_JOBID" : job.job_id,
+                                  "DWQ_JOB_UNIQUE" : str(unique), "DWQ_CONTROL_QUEUE" : job.body.get("control_queues")[0]})
 
                     workdir = None
                     workdir_error = None
@@ -117,7 +122,9 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         job.nack()
                     else:
                         runtime = time.time() - before
-                        job.done({ "status" : result, "output" : output, "worker" : args.name, "runtime" : runtime, "body" : job.body })
+                        job.done({ "status" : result, "output" : output, "worker" : args.name,
+                                   "runtime" : runtime, "body" : job.body, "unique" : str(unique) })
+
                         vprint(2, "worker %2i: command:" % n, command,
                                 "result:", result, "runtime: %.1fs" % runtime)
                         working_set.discard(job.job_id)
