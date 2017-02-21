@@ -9,6 +9,7 @@ import time
 import argparse
 
 from dwq import Job, Disque
+import util
 
 def sigterm_handler(signal, stack_frame):
     raise SystemExit()
@@ -58,8 +59,9 @@ def parse_args():
     parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
     parser.add_argument('-o', "--outfile", help='write job results to file', type=argparse.FileType('w'))
     parser.add_argument('-b', "--batch", help='send all jobs together', action="store_true")
-    parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append", default=[])
     parser.add_argument('-S', "--subjob", help='pass job(s) to master instance, don\'t wait for completion', action="store_true")
+    parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append", default=[])
+    parser.add_argument('-F', "--file", help='send file along with job', type=str, action="append", default=[])
 
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
@@ -163,6 +165,12 @@ def main():
     if args.report:
         Job.add(args.report, { "status" : "collecting jobs" })
 
+    try:
+        file_data = util.gen_file_data(args.file)
+    except util.GenFileDataException as e:
+        print("dwqc: error processing --file argument:", e, file=sys.stderr)
+        sys.exit(1)
+
     result_list = []
     try:
         jobs = set()
@@ -171,6 +179,8 @@ def main():
             options = {}
             if args.exclusive_jobdir:
                 options.update({ "jobdir" : "exclusive" })
+            if file_data:
+                options["files"] = file_data
             queue_job(jobs, job_queue, create_body(args, args.command, options, parent_jobid), [control_queue])
         else:
             jobs_read = 0
@@ -193,6 +203,9 @@ def main():
 
                 if args.exclusive_jobdir:
                     options.update({ "jobdir" : "exclusive" })
+
+                if file_data:
+                    options["files"] = file_data
 
                 if args.batch:
                     batch.append((job_queue, create_body(args, command, options, parent_jobid), [control_queue]))

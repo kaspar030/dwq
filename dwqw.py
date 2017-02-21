@@ -19,6 +19,8 @@ from dwq import Job, Disque
 
 from gitjobdir import GitJobDir
 
+import util
+
 def sigterm_handler(signal, stack_frame):
     raise SystemExit()
 
@@ -110,6 +112,8 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             vprint(1, "worker %2i: cannot get job dir, erroring job" % n)
                         working_set.discard(job.job_id)
                         continue
+
+                    util.write_files(options.get('files'), workdir)
 
                     handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env)
                     output, result = handle.wait(timeout=300)
