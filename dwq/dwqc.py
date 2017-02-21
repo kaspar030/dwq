@@ -9,7 +9,7 @@ import time
 import argparse
 
 from dwq import Job, Disque
-import util
+import dwq.util as util
 
 def sigterm_handler(signal, stack_frame):
     raise SystemExit()
@@ -283,11 +283,12 @@ def main():
                             print(job["result"]["output"], end="")
                             if args.progress:
                                 print("")
-
-                        if job["result"]["status"] in { 0, "0", "pass" }:
+                        _has_passed = job["result"]["status"] in { 0, "0", "pass" }
+                        if _has_passed:
                             passed += 1
                         else:
                             failed += 1
+
                         if args.outfile:
                             result_list.append(job)
 

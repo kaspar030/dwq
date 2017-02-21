@@ -14,12 +14,12 @@ import subprocess
 import redis
 from redis.exceptions import ConnectionError, RedisError
 
-import cmdserver
 from dwq import Job, Disque
 
-from gitjobdir import GitJobDir
+import dwq.cmdserver as cmdserver
+from dwq.gitjobdir import GitJobDir
 
-import util
+import dwq.util as util
 
 def sigterm_handler(signal, stack_frame):
     raise SystemExit()
