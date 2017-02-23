@@ -126,6 +126,13 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         job.nack()
                     else:
                         runtime = time.time() - before
+
+                        options = job.body.get("options")
+                        if options:
+                            options.pop("files", None)
+                            if not options:
+                                job.body.pop("options", None)
+
                         job.done({ "status" : result, "output" : output, "worker" : args.name,
                                    "runtime" : runtime, "body" : job.body, "unique" : str(unique) })
 
