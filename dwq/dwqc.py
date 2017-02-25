@@ -281,8 +281,6 @@ def main():
                             if args.progress:
                                 print("\033[K", end="")
                             print(job["result"]["output"], end="")
-                            if args.progress:
-                                print("")
                         _has_passed = job["result"]["status"] in { 0, "0", "pass" }
                         if _has_passed:
                             passed += 1
@@ -311,7 +309,7 @@ def main():
                             eta = (total - done) * per_job
 
                             if args.progress:
-                                print("\033[F\033[K[%s] %s/%s jobs done (%s passed, %s failed.) " \
+                                print("\r\033[K[%s] %s/%s jobs done (%s passed, %s failed.) " \
                                     "ETA:" % (nicetime(elapsed), done, total, passed, failed), nicetime(eta), end="\r")
 
                             if args.report:
