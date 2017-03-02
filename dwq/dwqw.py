@@ -42,7 +42,10 @@ def parse_args():
 
 shutdown = False
 
+active_event = threading.Event()
+
 def worker(n, cmd_server_pool, gitjobdir, args, working_set):
+    global active_event
     global shutdown
     print("worker %2i: started" % n)
     buildnum = 0
@@ -52,6 +55,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                 time.sleep(1)
                 continue
             while not shutdown:
+                active_event.wait()
                 jobs = Job.get(args.queues)
                 for job in jobs:
                     if shutdown:
@@ -173,9 +177,34 @@ def vprint(n, *args, **kwargs):
     if n <= verbose:
         print(*args, **kwargs)
 
+def handle_control_job(job):
+    global active_event
+    job.done({"status" : "pass", "output" : ""})
+    body = job.body
+    print(body)
+    try:
+        control = body["control"]
+        cmd = control["cmd"]
+        if cmd == "shutdown":
+            vprint(1, "dwqw: shutdown command received")
+            raise SystemExit()
+
+        elif cmd == "pause":
+            vprint(1, "dwqw: pause command received. pausing ...")
+            active_event.clear()
+        elif cmd == "resume":
+            vprint(1, "dwqw: resume command received. resuming ...")
+            active_event.set()
+        else:
+            vprint(1, "dwqw: unknown control command \"%s\" received" % cmd)
+
+    except KeyError:
+        vprint(1, "dwqw: error: invalid control job")
+
 def main():
     global shutdown
     global verbose
+    global active_event
 
     args = parse_args()
     verbose = args.verbose - args.quiet
@@ -199,8 +228,17 @@ def main():
     for n in range(1, args.jobs + 1):
         threading.Thread(target=worker, args=(n, cmd_server_pool, gitjobdir, args, working_set), daemon=True).start()
 
+    active_event.set()
+
     try:
         while True:
+            try:
+                control_jobs = Job.get(["control::worker::%s" % args.name])
+                for job in control_jobs or []:
+                    handle_control_job(job)
+            except RedisError:
+                pass
+
             if not Disque.connected():
                 try:
                     vprint(1, "dwqw: connecting...")
@@ -208,9 +246,10 @@ def main():
                     vprint(1, "dwqw: connected.")
                 except RedisError:
                     pass
-            time.sleep(1)
+                finally:
+                    time.sleep(1)
     except (KeyboardInterrupt, SystemExit):
-        vprint(1, "dwqw: signal caught, shutting down")
+        vprint(1, "dwqw: shutting down")
         shutdown = True
         cmd_server_pool.destroy()
         vprint(1, "dwqw: nack'ing jobs")
