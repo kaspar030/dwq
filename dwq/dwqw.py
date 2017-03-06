@@ -61,6 +61,14 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     if shutdown:
                         job.nack()
                         continue
+
+                    if job.additional_deliveries > 2:
+                        error = "too many deliveries (usual reason: timeout)"
+                        vprint(2, "worker %2i: %s" % (n, error))
+                        job.done({ "status" : "error", "output" : "dwqw: %s\n" % error,
+                            "worker" : args.name, "runtime" : 0, "body" : job.body })
+                        continue
+
                     buildnum += 1
                     working_set.add(job.job_id)
                     before = time.time()
@@ -119,10 +127,18 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                     util.write_files(options.get('files'), workdir)
 
-                    handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env)
-                    output, result = handle.wait(timeout=300)
+                    timeout = options.get("timeout", 300)
+
+                    if timeout >= 8:
+                        # send explit nack before disque times us out
+                        # but only if original timeout is not too small
+                        timeout -= 2
+
+                    handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env, start_new_session=True)
+                    output, result = handle.wait(timeout=timeout)
                     if handle.timeout:
                         result = "timeout"
+                        output = "dwqw: command timed out\n"
 
                     if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
                         vprint(2, "worker %2i: command:" % n, command,

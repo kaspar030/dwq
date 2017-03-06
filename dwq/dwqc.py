@@ -97,7 +97,11 @@ def create_body(args, command, options=None, parent_id=None):
     return body
 
 def queue_job(jobs_set, queue, body, control_queues):
-    job_id = Job.add(queue, body, control_queues)
+    timeout = body.get("options", {}).get("timeout")
+    if timeout:
+        job_id = Job.add(queue, body, control_queues, retry=timeout)
+    else:
+        job_id = Job.add(queue, body, control_queues)
 
     parent = body.get('parent')
     if parent:
@@ -199,7 +203,12 @@ def main():
                 command = tmp[0]
                 options = {}
                 if len(tmp) > 1:
-                    options = json.loads(tmp[1])
+                    command = command.rstrip()
+                    try:
+                        options = json.loads(tmp[1])
+                    except json.decoder.JSONDecodeError:
+                        vprint("dwqc: invalid option JSON. Skipping job.", file=sys.stderr)
+                        continue
 
                 if args.exclusive_jobdir:
                     options.update({ "jobdir" : "exclusive" })

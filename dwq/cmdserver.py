@@ -28,10 +28,10 @@ class CmdHandle(object):
 
     def wait(s, timeout=None):
         try:
-            res = s.queue.get(timeout=timeout)
+            res = s.queue.get(True, timeout=timeout)
         except Empty:
             s.timeout = True
-            return s.kill()
+            return s.killpg()
 
         s.pool.append(s.server)
         return res
