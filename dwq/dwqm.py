@@ -5,6 +5,7 @@ import random
 import sys
 
 from dwq import Job, Disque
+from dwq.version import __version__
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='dwqm', description='dwq: disque-based work queue (management tool)')
@@ -26,7 +27,7 @@ def parse_args():
     group.add_argument('-r', '--resume', help='resume node(s)', nargs="*", type=str)
     group.add_argument('-s', '--shutdown', help='shutdown node(s)', nargs="*", type=str)
 
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
     return parser.parse_args()
 

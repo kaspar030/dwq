@@ -11,9 +11,15 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+# Get the version from file
+with open(path.join(here, 'dwq/version.py'), encoding='utf-8') as f:
+    _version = f.read()
+
+version = _version.split("=")[1].lstrip().rstrip().lstrip('"').rstrip('"')
+
 setup(
     name='dwq',
-    version='0.0.35',
+    version=version,
 
     description='dwq: a Disque based work queue',
     long_description=long_description,

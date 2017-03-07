@@ -11,6 +11,8 @@ import argparse
 from dwq import Job, Disque
 import dwq.util as util
 
+from dwq.version import __version__
+
 def sigterm_handler(signal, stack_frame):
     raise SystemExit()
 
@@ -43,7 +45,6 @@ def parse_args():
             help='queue name for jobs (default: \"default\")',
             default=os.environ.get("DWQ_QUEUE") or "default")
 
-
     parser.add_argument('-r', "--repo", help='git repository to work on', type=str,
             required="DWQ_REPO" not in os.environ, default=os.environ.get("DWQ_REPO"))
 
@@ -63,7 +64,7 @@ def parse_args():
     parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append", default=[])
     parser.add_argument('-F', "--file", help='send file along with job', type=str, action="append", default=[])
 
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
     parser.add_argument('command', type=str, nargs='?')
 

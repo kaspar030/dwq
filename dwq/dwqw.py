@@ -21,13 +21,15 @@ from dwq.gitjobdir import GitJobDir
 
 import dwq.util as util
 
+from dwq.version import __version__
+
 def sigterm_handler(signal, stack_frame):
     raise SystemExit()
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='dwqw', description='dwq: disque-based work queue (worker)')
 
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
     parser.add_argument('-q', '--queues', type=str,
             help='queues to wait for jobs (default: \"default\")', nargs='*', default=["default"])
