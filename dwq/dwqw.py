@@ -112,55 +112,61 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     workdir = None
                     workdir_error = None
                     try:
-                        workdir = gitjobdir.get(repo, commit, exclusive=exclusive or str(n))
-                    except subprocess.CalledProcessError as e:
-                        workdir_error = "dwqw: error getting jobdir. output: \n" + e.output.decode("utf-8")
+                        try:
+                            workdir = gitjobdir.get(repo, commit, exclusive=exclusive or str(n))
+                        except subprocess.CalledProcessError as e:
+                            workdir_error = "dwqw: error getting jobdir. output: \n" + e.output.decode("utf-8")
 
-                    if not workdir:
-                        if job.nacks < (options.get("max_retries") or 2):
+                        if not workdir:
+                            if job.nacks < (options.get("max_retries") or 2):
+                                job.nack()
+                                vprint(1, "worker %2i: error getting job dir, requeueing job" % n)
+                            else:
+                                job.done({ "status" : "error", "output" : workdir_error or "dwqw: error getting jobdir\n",
+                                            "worker" : args.name, "runtime" : 0, "body" : job.body })
+                                vprint(1, "worker %2i: cannot get job dir, erroring job" % n)
+                            working_set.discard(job.job_id)
+                            continue
+
+                        util.write_files(options.get('files'), workdir)
+
+                        timeout = options.get("timeout", 300)
+
+                        if timeout >= 8:
+                            # send explit nack before disque times us out
+                            # but only if original timeout is not too small
+                            timeout -= 2
+
+                        handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env, start_new_session=True)
+                        output, result = handle.wait(timeout=timeout)
+                        if handle.timeout:
+                            result = "timeout"
+                            output = "dwqw: command timed out\n"
+
+                        if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
+                            vprint(2, "worker %2i: command:" % n, command,
+                                    "result:", result, "nacks:", job.nacks, "re-queueing.")
                             job.nack()
-                            vprint(1, "worker %2i: error getting job dir, requeueing job" % n)
                         else:
-                            job.done({ "status" : "error", "output" : workdir_error or "dwqw: error getting jobdir\n",
-                                        "worker" : args.name, "runtime" : 0, "body" : job.body })
-                            vprint(1, "worker %2i: cannot get job dir, erroring job" % n)
-                        working_set.discard(job.job_id)
-                        continue
+                            runtime = time.time() - before
 
-                    util.write_files(options.get('files'), workdir)
+                            options = job.body.get("options")
+                            if options:
+                                options.pop("files", None)
+                                if not options:
+                                    job.body.pop("options", None)
 
-                    timeout = options.get("timeout", 300)
+                            job.done({ "status" : result, "output" : output, "worker" : args.name,
+                                       "runtime" : runtime, "body" : job.body, "unique" : str(unique) })
 
-                    if timeout >= 8:
-                        # send explit nack before disque times us out
-                        # but only if original timeout is not too small
-                        timeout -= 2
+                            vprint(2, "worker %2i: command:" % n, command,
+                                    "result:", result, "runtime: %.1fs" % runtime)
+                            working_set.discard(job.job_id)
+                    except Exception as e:
+                        if workdir:
+                            gitjobdir.release(workdir)
+                        raise e
 
-                    handle = cmd_server_pool.runcmd(command, cwd=workdir, shell=True, env=_env, start_new_session=True)
-                    output, result = handle.wait(timeout=timeout)
-                    if handle.timeout:
-                        result = "timeout"
-                        output = "dwqw: command timed out\n"
-
-                    if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
-                        vprint(2, "worker %2i: command:" % n, command,
-                                "result:", result, "nacks:", job.nacks, "re-queueing.")
-                        job.nack()
-                    else:
-                        runtime = time.time() - before
-
-                        options = job.body.get("options")
-                        if options:
-                            options.pop("files", None)
-                            if not options:
-                                job.body.pop("options", None)
-
-                        job.done({ "status" : result, "output" : output, "worker" : args.name,
-                                   "runtime" : runtime, "body" : job.body, "unique" : str(unique) })
-
-                        vprint(2, "worker %2i: command:" % n, command,
-                                "result:", result, "runtime: %.1fs" % runtime)
-                        working_set.discard(job.job_id)
                     gitjobdir.release(workdir)
 
         except Exception as e:
@@ -250,6 +256,15 @@ def main():
 
     try:
         while True:
+            if not Disque.connected():
+                try:
+                    vprint(1, "dwqw: connecting...")
+                    Disque.connect(servers)
+                    vprint(1, "dwqw: connected.")
+                except RedisError:
+                    time.sleep(1)
+                    continue
+
             try:
                 control_jobs = Job.get(["control::worker::%s" % args.name])
                 for job in control_jobs or []:
@@ -257,15 +272,6 @@ def main():
             except RedisError:
                 pass
 
-            if not Disque.connected():
-                try:
-                    vprint(1, "dwqw: connecting...")
-                    Disque.connect(servers)
-                    vprint(1, "dwqw: connected.")
-                except RedisError:
-                    pass
-                finally:
-                    time.sleep(1)
     except (KeyboardInterrupt, SystemExit):
         vprint(1, "dwqw: shutting down")
         shutdown = True
