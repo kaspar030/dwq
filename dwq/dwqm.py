@@ -16,21 +16,22 @@ def parse_args():
     parser_queue.set_defaults(func=queue)
 
     group = parser_queue.add_mutually_exclusive_group(required=True)
-    group.add_argument('-s', '--show', help='show disque queue(s)', nargs="*", type=str)
-    group.add_argument('-d', '--drain', help='empty disque queue(s)', nargs="*", type=str)
+    group.add_argument('-s', '--show', help='show disque queue(s)', action='store_true')
+    group.add_argument('-d', '--drain', help='empty disque queue(s)', action='store_true')
+    parser_queue.add_argument('queues', type=str, nargs='*')
 
     parser_control = subparsers.add_parser('control', help='control help')
     parser_control.set_defaults(func=control)
     group = parser_control.add_mutually_exclusive_group(required=True)
-    group.add_argument('-l', '--list', help='list node(s)', nargs="*", type=str)
-    group.add_argument('-p', '--pause', help='pause node(s)', nargs="*", type=str)
-    group.add_argument('-r', '--resume', help='resume node(s)', nargs="*", type=str)
-    group.add_argument('-s', '--shutdown', help='shutdown node(s)', nargs="*", type=str)
+    group.add_argument('-l', '--list', help='list node(s)', action='store_true')
+    group.add_argument('-p', '--pause', help='pause node(s)', action='store_true')
+    group.add_argument('-r', '--resume', help='resume node(s)', action='store_true')
+    group.add_argument('-s', '--shutdown', help='shutdown node(s)', action='store_true')
+    parser_control.add_argument('nodes', type=str, nargs='*')
 
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
     return parser.parse_args()
-
 
 def print_queue(name, qstat):
     print("name:", name, "len:", qstat['len'], "blocked:", qstat['blocked'])
@@ -38,10 +39,8 @@ def print_queue(name, qstat):
 def show(queues):
     Disque.connect(["localhost:7711"])
 
-    qstat = Disque.qstat()
-
-    if not queues:
-        queues = sorted(qstat.keys())
+    qstat = Disque.qstat(queues)
+    queues = sorted(qstat.keys())
 
     for name in queues:
         try:
@@ -72,20 +71,20 @@ def drain(queues):
         pass
 
 def queue(args):
-    if args.drain != None:
-        drain(args.drain)
-    elif args.show != None:
-        show(args.show)
+    if args.drain:
+        drain(args.queues)
+    elif args.show:
+        show(args.queues)
 
 def control(args):
     Disque.connect(["localhost:7711"])
 
-    if args.pause != None:
-        control_cmd(args.pause, "pause")
-    elif args.shutdown != None:
-        control_cmd(args.shutdown, "shutdown")
-    elif args.resume != None:
-        control_cmd(args.resume, "resume")
+    if args.pause:
+        control_cmd(args.nodes, "pause")
+    elif args.shutdown:
+        control_cmd(args.nodes, "shutdown")
+    elif args.resume:
+        control_cmd(args.nodes, "resume")
 
 def control_cmd(nodes, cmd):
     control_queue = "control::%s" % str(random.random())
