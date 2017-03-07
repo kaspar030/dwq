@@ -31,7 +31,7 @@ class Disque(object):
 
         for queue in queues:
             queue = queue.decode('ascii')
-            qstat_list = disque.qstat(queue)
+            qstat_list = disque.qstat(queue) or []
             qstat = {}
             name = None
             while len(qstat_list):
