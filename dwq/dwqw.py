@@ -118,7 +118,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             workdir_error = "dwqw: error getting jobdir. output: \n" + e.output.decode("utf-8")
 
                         if not workdir:
-                            if job.nacks < (options.get("max_retries") or 2):
+                            if job.nacks < options.get("max_retries", 2):
                                 job.nack()
                                 vprint(1, "worker %2i: error getting job dir, requeueing job" % n)
                             else:
@@ -143,7 +143,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             result = "timeout"
                             output = "dwqw: command timed out\n"
 
-                        if (result not in { 0, "0", "pass" }) and job.nacks < (options.get("max_retries") or 2):
+                        if (result not in { 0, "0", "pass" }) and job.nacks < options.get("max_retries", 2):
                             vprint(2, "worker %2i: command:" % n, command,
                                     "result:", result, "nacks:", job.nacks, "re-queueing.")
                             job.nack()
