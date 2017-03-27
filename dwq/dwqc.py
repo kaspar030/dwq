@@ -263,6 +263,7 @@ def main():
         total = len(jobs)
         done = 0
         failed = 0
+        failed_expected = 0
         passed = 0
         subjobs = {}
         while jobs:
@@ -296,6 +297,11 @@ def main():
                             passed += 1
                         else:
                             failed += 1
+                            try:
+                                if job["result"]["body"]["options"]["fail_ok"]:
+                                    failed_expected += 1
+                            except KeyError:
+                                pass
 
                         if args.outfile:
                             result_list.append(job)
@@ -344,5 +350,5 @@ def main():
 
     Job.add(args.report, { "status" : "done"})
 
-    if failed > 0:
+    if failed > failed_expected:
         sys.exit(1)
