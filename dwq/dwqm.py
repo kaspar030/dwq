@@ -16,7 +16,7 @@ def parse_args():
     parser_queue.set_defaults(func=queue)
 
     group = parser_queue.add_mutually_exclusive_group(required=True)
-    group.add_argument('-s', '--show', help='show disque queue(s)', action='store_true')
+    group.add_argument('-l', '--list', help='list all disque queue(s)', action='store_true')
     group.add_argument('-d', '--drain', help='empty disque queue(s)', action='store_true')
     parser_queue.add_argument('queues', type=str, nargs='*')
 
@@ -27,6 +27,11 @@ def parse_args():
     group.add_argument('-p', '--pause', help='pause node(s)', action='store_true')
     group.add_argument('-r', '--resume', help='resume node(s)', action='store_true')
     group.add_argument('-s', '--shutdown', help='shutdown node(s)', action='store_true')
+    group.add_argument('-P', '--ping', help='ping node(s)', action='store_true')
+
+#    parser_control.add_argument('-f', '--force', help='don\'t wait for job completion on pause/shutdown',
+#                                action='store_true')
+
     parser_control.add_argument('nodes', type=str, nargs='*')
 
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
@@ -36,7 +41,7 @@ def parse_args():
 def print_queue(name, qstat):
     print("name:", name, "len:", qstat['len'], "blocked:", qstat['blocked'])
 
-def show(queues):
+def listq(queues):
     Disque.connect(["localhost:7711"])
 
     qstat = Disque.qstat(queues)
@@ -73,29 +78,64 @@ def drain(queues):
 def queue(args):
     if args.drain:
         drain(args.queues)
-    elif args.show:
-        show(args.queues)
+    elif args.list:
+        listq(args.queues)
 
 def control(args):
     Disque.connect(["localhost:7711"])
 
+    jobargs = {}
+#    if args.force:
+#        jobargs["force"] = True
+
     if args.pause:
-        control_cmd(args.nodes, "pause")
-    elif args.shutdown:
-        control_cmd(args.nodes, "shutdown")
+        control_cmd(args.nodes, "pause", **jobargs)
     elif args.resume:
         control_cmd(args.nodes, "resume")
+    elif args.shutdown:
+        control_cmd(args.nodes, "shutdown", **jobargs)
+    elif args.ping:
+        control_cmd(args.nodes, "ping")
+    elif args.list:
+        list_nodes()
 
-def control_cmd(nodes, cmd):
+def get_nodes():
+    queues = Disque.qscan()
+    nodes = []
+
+    for queue in queues:
+        if queue.startswith("control::worker::"):
+            nodes.append(queue[17:])
+
+    return nodes
+
+def list_nodes():
+    nodes = get_nodes()
+    for node in sorted(nodes):
+        print(node)
+
+def control_cmd(nodes, cmd, **kwargs):
     control_queue = "control::%s" % str(random.random())
     job_ids = []
     for node in nodes:
         print("dwqm: sending \"%s\" command to node \"%s\"" % (cmd, node))
-        job_id = control_send_cmd(node, cmd, control_queue)
+        job_id = control_send_cmd(node, cmd, control_queue, **kwargs)
         job_ids.append(job_id)
 
-def control_send_cmd(worker_name, cmd, control_queue):
+    while job_ids:
+        for job in Job.wait(control_queue, count=len(job_ids)):
+            job_id = job["job_id"]
+            job_ids.remove(job_id)
+            try:
+                print("%s:" % job["result"]["worker"], job["result"].get("output"))
+            except KeyError:
+                pass
+
+def control_send_cmd(worker_name, cmd, control_queue, **kwargs):
     body = { "control" : { "cmd" : cmd }}
+    if kwargs:
+        body["control"]["args"] = kwargs
+
     job_id = Job.add("control::worker::%s" % worker_name, body, [control_queue])
     return job_id
 

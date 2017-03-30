@@ -201,29 +201,46 @@ def vprint(n, *args, **kwargs):
     if n <= verbose:
         print(*args, **kwargs)
 
-def handle_control_job(job):
+def handle_control_job(args, job):
     global active_event
-    job.done({"status" : "pass", "output" : ""})
+    global shutdown
     body = job.body
-    print(body)
+    status = 0
+    result = ""
+
     try:
         control = body["control"]
         cmd = control["cmd"]
         if cmd == "shutdown":
             vprint(1, "dwqw: shutdown command received")
-            raise SystemExit()
+            result = "shutting down"
+            shutdown = 1
 
         elif cmd == "pause":
             vprint(1, "dwqw: pause command received. pausing ...")
             active_event.clear()
+            result = "paused"
         elif cmd == "resume":
             vprint(1, "dwqw: resume command received. resuming ...")
             active_event.set()
+            result = "resumed"
+        elif cmd == "ping":
+            vprint(1, "dwqw: ping received")
+            result="pong"
         else:
             vprint(1, "dwqw: unknown control command \"%s\" received" % cmd)
 
     except KeyError:
         vprint(1, "dwqw: error: invalid control job")
+
+    control_reply(args, job, result, status)
+
+    if shutdown:
+        raise SystemExit()
+
+def control_reply(args, job, reply, status=0):
+    job.done({ "status" : status, "output" : reply, "worker" : args.name,
+        "body" : job.body })
 
 def main():
     global shutdown
@@ -268,7 +285,7 @@ def main():
             try:
                 control_jobs = Job.get(["control::worker::%s" % args.name])
                 for job in control_jobs or []:
-                    handle_control_job(job)
+                    handle_control_job(args, job)
             except RedisError:
                 pass
 
