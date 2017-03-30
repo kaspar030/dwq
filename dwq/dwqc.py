@@ -57,6 +57,7 @@ def parse_args():
     parser.add_argument('-R', "--report", help='report to disque queue', action="store", type=str)
     parser.add_argument('-v', "--verbose", help='enable status output', action="store_true" )
     parser.add_argument('-Q', "--quiet", help='don\'t print command output', action="store_true" )
+    parser.add_argument('-m', "--maxfail", help='exit after more than <maxfail> jobs failed', type=int, default=sys.maxsize)
     parser.add_argument('-s', "--stdin", help='read from stdin', action="store_true" )
     parser.add_argument('-o', "--outfile", help='write job results to file', type=argparse.FileType('w'))
     parser.add_argument('-b', "--batch", help='send all jobs together', action="store_true")
@@ -332,6 +333,11 @@ def main():
                                 Job.add(args.report, { "status" : "working", "elapsed" : elapsed, \
                                         "eta" : eta, "total" : total, "passed" : passed, "failed" : failed, "job" : job})
 
+                        if not _has_passed:
+                            if failed > failed_expected:
+                                if (failed - failed_expected) > args.maxfail:
+                                    print("dwqc: more than %i jobs failed. Exiting." % args.maxfail, file=sys.stderr)
+                                    sys.exit(1)
                     except KeyError:
                         unexpected[job_id] = job
 
