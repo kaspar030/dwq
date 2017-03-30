@@ -21,14 +21,19 @@ class Disque(object):
             return False
         return True
 
+    def qscan(*args):
+        queues = []
+        n, _queues = disque.qscan(*args)
+        for queue in _queues:
+            queues.append(queue.decode('utf-8'))
+
+        return queues
+
     def qstat(queues=None, *args):
         global disque
 
         if not queues:
-            n, _queues = disque.qscan(*args)
-            queues = []
-            for queue in _queues:
-                queues.append(queue.decode('ascii'))
+            queues = Disque.qscan(*args)
 
         active = []
         queue_dict = {}
