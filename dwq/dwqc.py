@@ -212,6 +212,8 @@ def main():
                         vprint("dwqc: invalid option JSON. Skipping job.", file=sys.stderr)
                         continue
 
+                _job_queue = options.get("queue", job_queue)
+
                 if args.exclusive_jobdir:
                     options.update({ "jobdir" : "exclusive" })
 
@@ -219,10 +221,10 @@ def main():
                     options["files"] = file_data
 
                 if args.batch:
-                    batch.append((job_queue, create_body(args, command, options, parent_jobid), [control_queue]))
+                    batch.append((_job_queue, create_body(args, command, options, parent_jobid), [control_queue]))
                 else:
-                    job_id = queue_job(jobs, job_queue, create_body(args, command, options, parent_jobid), [control_queue])
-                    vprint("dwqc: job %s command=\"%s\" sent." % (job_id, command))
+                    job_id = queue_job(jobs, _job_queue, create_body(args, command, options, parent_jobid), [control_queue])
+                    vprint("dwqc: job %s command=\"%s\" sent to queue %s." % (job_id, command, _job_queue))
                     if args.progress:
                         print("")
 
