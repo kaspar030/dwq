@@ -93,8 +93,13 @@ def create_body(args, command, options=None, parent_id=None):
     if parent_id:
         body["parent"] = parent_id
 
+    env = {}
     if args.env:
-        body["env"] = get_env(args.env)
+        env.update(get_env(args.env))
+
+    env.update(options.get("env", {}))
+    if env:
+        body["env"] = env
 
     return body
 
