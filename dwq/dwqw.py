@@ -9,6 +9,7 @@ import signal
 import socket
 import traceback
 import multiprocessing
+import shutil
 import subprocess
 
 import redis
@@ -130,6 +131,10 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                         util.write_files(options.get('files'), workdir)
 
+                        # assets
+                        asset_dir = os.path.join(workdir, "assets", "%s:%s" % (hash(job.job_id), str(unique)))
+                        _env.update({ "DWQ_ASSETS" : asset_dir })
+
                         timeout = options.get("timeout", 300)
 
                         if timeout >= 8:
@@ -153,11 +158,24 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             options = job.body.get("options")
                             if options:
                                 options.pop("files", None)
-                                if not options:
-                                    job.body.pop("options", None)
 
-                            job.done({ "status" : result, "output" : output, "worker" : args.name,
-                                       "runtime" : runtime, "body" : job.body, "unique" : str(unique) })
+                            # remove options from body if it is now empty
+                            if not options:
+                                job.body.pop("options", None)
+
+                            _result = { "status" : result, "output" : output, "worker" : args.name,
+                                        "runtime" : runtime, "body" : job.body, "unique" : str(unique) }
+
+                            # pack assets
+                            try:
+                                asset_files = os.listdir(asset_dir)
+                                if asset_files:
+                                    _result.update({ "assets" :  util.gen_file_data(asset_files, asset_dir) })
+                                    shutil.rmtree(asset_dir, ignore_errors=True)
+                            except FileNotFoundError:
+                                pass
+
+                            job.done(_result)
 
                             vprint(2, "worker %2i: command:" % n, command,
                                     "result:", result, "runtime: %.1fs" % runtime)

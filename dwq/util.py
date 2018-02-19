@@ -5,9 +5,10 @@ import os
 class GenFileDataException(Exception):
     pass
 
-def gen_file_data(names):
+def gen_file_data(names, root=None):
     res = {}
-    cwd = os.getcwd()
+    if not root:
+        root = os.getcwd()
     for name in names:
         parts = name.split(":", maxsplit=1)
         if len(parts) == 2:
@@ -20,13 +21,15 @@ def gen_file_data(names):
         else:
             local = name
             if name.startswith("/"):
-                if not name.startswith(cwd + "/"):
+                if not name.startswith(root + "/"):
                     raise Exception("file %s: remote path must be relative to cwd" % local)
                 else:
-                    remote = os.path.abspath(name)[len(cwd)+1:]
+                    remote = os.path.abspath(name)[len(root)+1:]
             else:
                 remote = name
 
+        if not local.startswith("/"):
+            local = os.path.join(root, local)
         try:
             res[remote] = base64_file(local)
         except FileNotFoundError as e:

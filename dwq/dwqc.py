@@ -64,6 +64,8 @@ def parse_args():
     parser.add_argument('-S', "--subjob", help='pass job(s) to master instance, don\'t wait for completion', action="store_true")
     parser.add_argument('-E', "--env", help='export environment variable to client', type=str, action="append", default=[])
     parser.add_argument('-F', "--file", help='send file along with job', type=str, action="append", default=[])
+    parser.add_argument('-a', "--asset", help='save specific asset', type=str, action="append", default=[])
+    parser.add_argument('-A', "--asset-dir", help='save all assets', type=str, action="store")
 
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
@@ -140,6 +142,39 @@ def dict_dictadd(_dict, key):
         _tmp = {}
         _dict[key] = _tmp
         return _tmp
+
+def handle_assets(job, args):
+    assets = job["result"].get("assets")
+    asset_dir = args.asset_dir
+
+    if assets:
+        asset_map = {}
+        for _asset in args.asset:
+            _split = _asset.split(":")
+            if len(_split) == 1:
+                remote = _asset
+                local = _asset
+            elif len(_split) == 2:
+                remote, local = _split
+            else:
+                print("dwqc: error: invalid asset spec \"%s\"" % _asset, file=sys.stderr)
+                sys.exit(1)
+
+            asset_map[remote] = local
+
+        for remote, data in assets.items():
+            local = asset_map.get(remote)
+            if not local:
+                if asset_dir:
+                    local = os.path.realpath(os.path.join(asset_dir, remote))
+                    if not local.startswith(asset_dir):
+                        print("dwqc: warning: asset \"%s\" is not relative"
+                              " to \"%s\", ignoring" % (remote, asset_dir),
+                              file=sys.stderr)
+                else:
+                    print("dwqc: warning: ignoring asset \"%s\"" % remote, file=sys.stderr)
+                    continue
+            util.write_files({ local : data })
 
 def main():
     global verbose
@@ -303,6 +338,7 @@ def main():
                         _has_passed = job["result"]["status"] in { 0, "0", "pass" }
                         if _has_passed:
                             passed += 1
+                            handle_assets(job, args)
                         else:
                             failed += 1
                             try:
