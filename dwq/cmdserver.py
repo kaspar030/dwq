@@ -63,12 +63,15 @@ class CmdServer(object):
                 args, kwargs = inQueue.get()
                 kwargs["stderr"] = STDOUT
                 kwargs["stdout"] = PIPE
-                process = Popen(*args, **kwargs)
-                outQueue.put(process.pid)
                 output = u""
-                with process:
-                    output += process.stdout.read().decode("utf-8", "replace")
-                outQueue.put((output, process.returncode))
+                try:
+                    process = Popen(*args, **kwargs)
+                    outQueue.put(process.pid)
+                    with process:
+                        output += process.stdout.read().decode("utf-8", "replace")
+                    outQueue.put((output, process.returncode))
+                except FileNotFoundError:
+                    outQueue.put((output, 127))
         except (KeyboardInterrupt, SystemExit):
             pass
 
