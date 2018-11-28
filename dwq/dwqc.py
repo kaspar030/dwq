@@ -397,7 +397,8 @@ def main():
             Job.add(args.report, { "status" : "canceled"})
         sys.exit(1)
 
-    Job.add(args.report, { "status" : "done"})
+    if args.report:
+        Job.add(args.report, { "status" : "done"})
 
     if failed > failed_expected:
         sys.exit(1)
