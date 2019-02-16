@@ -4,6 +4,7 @@ import sys
 
 from dwq import Job, Disque
 
+
 def main():
     Disque.connect(["localhost:7711"])
 
@@ -16,5 +17,6 @@ def main():
     except KeyboardInterrupt:
         pass
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()

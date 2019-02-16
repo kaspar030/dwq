@@ -3,6 +3,7 @@ from pydisque.client import Client
 
 disque = None
 
+
 class Disque(object):
     def connect(servers):
         global disque
@@ -25,7 +26,7 @@ class Disque(object):
         queues = []
         n, _queues = disque.qscan(*args)
         for queue in _queues:
-            queues.append(queue.decode('utf-8'))
+            queues.append(queue.decode("utf-8"))
 
         return queues
 
@@ -43,12 +44,12 @@ class Disque(object):
             qstat = {}
             name = None
             while len(qstat_list):
-                key = qstat_list[0].decode('ascii')
+                key = qstat_list[0].decode("ascii")
                 val = qstat_list[1]
                 qstat_list = qstat_list[2:]
                 if isinstance(val, bytes):
-                    val = val.decode('ascii')
-                if key != 'name':
+                    val = val.decode("ascii")
+                if key != "name":
                     qstat[key] = val
                 else:
                     name = val
@@ -56,6 +57,7 @@ class Disque(object):
                 queue_dict[name] = qstat
 
         return queue_dict
+
 
 class Job(object):
     def __init__(s, job_id, body, queue_name, nacks, additional_deliveries):
@@ -69,7 +71,9 @@ class Job(object):
     def get(queues, timeout=None, count=None, nohang=False):
         global disque
         jobs = []
-        _jobs = disque.get_job(queues, timeout=timeout, count=count, nohang=nohang, withcounters=True)
+        _jobs = disque.get_job(
+            queues, timeout=timeout, count=count, nohang=nohang, withcounters=True
+        )
         for queue_name, job_id, json_body, nacks, additional_deliveries in _jobs:
             queue_name = queue_name.decode("ascii")
             job_id = job_id.decode("ascii")
@@ -85,9 +89,12 @@ class Job(object):
     def done(s, result):
         if s.control_queues:
             for queue in s.control_queues:
-                if queue=="$jobid":
+                if queue == "$jobid":
                     queue = s.job_id
-                disque.add_job(queue, json.dumps({"job_id" : s.job_id, "state" : "done", "result" : result }))
+                disque.add_job(
+                    queue,
+                    json.dumps({"job_id": s.job_id, "state": "done", "result": result}),
+                )
 
         disque.ack_job(s.job_id)
 

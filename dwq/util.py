@@ -2,8 +2,10 @@ import json
 import base64
 import os
 
+
 class GenFileDataException(Exception):
     pass
+
 
 def gen_file_data(names, root=None):
     res = {}
@@ -14,17 +16,23 @@ def gen_file_data(names, root=None):
         if len(parts) == 2:
             local, remote = parts
             if remote.startswith("/"):
-                raise GenFileDataException("file %s: remote name %s must be relative" % (local, remote))
+                raise GenFileDataException(
+                    "file %s: remote name %s must be relative" % (local, remote)
+                )
 
             if ".." in remote:
-                raise GenFileDataException("file %s: no \"..\" allowed in remote name %s" % (local, remote))
+                raise GenFileDataException(
+                    'file %s: no ".." allowed in remote name %s' % (local, remote)
+                )
         else:
             local = name
             if name.startswith("/"):
                 if not name.startswith(root + "/"):
-                    raise Exception("file %s: remote path must be relative to cwd" % local)
+                    raise Exception(
+                        "file %s: remote path must be relative to cwd" % local
+                    )
                 else:
-                    remote = os.path.abspath(name)[len(root)+1:]
+                    remote = os.path.abspath(name)[len(root) + 1 :]
             else:
                 remote = name
 
@@ -37,9 +45,11 @@ def gen_file_data(names, root=None):
 
     return res
 
+
 def base64_file(name):
     with open(name, "rb") as f:
         return base64.b64encode(f.read()).decode("ascii")
+
 
 def write_files(data, workdir=None):
     data = data or {}

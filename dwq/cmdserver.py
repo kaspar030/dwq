@@ -15,8 +15,10 @@ import signal
 from collections import deque
 import os
 
+
 class CmdTimeout(Exception):
     pass
+
 
 class CmdHandle(object):
     def __init__(s, queue, pid, pool, server):
@@ -50,11 +52,14 @@ class CmdHandle(object):
             pass
         return s.wait()
 
+
 class CmdServer(object):
     def __init__(s, pool):
         s.inQueue = Queue()
         s.outQueue = Queue()
-        s.cmdHostProcess = Process(target=CmdServer.cmdloop, args=(s, s.inQueue, s.outQueue, pool), daemon=True)
+        s.cmdHostProcess = Process(
+            target=CmdServer.cmdloop, args=(s, s.inQueue, s.outQueue, pool), daemon=True
+        )
         s.cmdHostProcess.start()
 
     def cmdloop(s, inQueue, outQueue, pool):
@@ -82,6 +87,7 @@ class CmdServer(object):
 
     def killCmdHostProcess(s):
         s.cmdHostProcess.terminate()
+
 
 class CmdServerPool(object):
     def __init__(s, n):

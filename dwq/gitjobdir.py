@@ -6,6 +6,7 @@ import subprocess
 import time
 import threading
 
+
 def dictadd(_dict, key, val=1, ret_post=True):
     pre = _dict.get(key)
     post = (pre or 0) + val
@@ -14,6 +15,7 @@ def dictadd(_dict, key, val=1, ret_post=True):
         return post
     else:
         return pre
+
 
 class GitJobDir(object):
     def __init__(s, basedir=None, maxdirs=4):
@@ -82,7 +84,7 @@ class GitJobDir(object):
                 print("GitJobDir: warning: release() on unused job dir!")
             else:
                 if dictadd(s.use_counts, _dir, -1) == 0:
-                    #print("GitJobDir: last user of %s gone." % _dir)
+                    # print("GitJobDir: last user of %s gone." % _dir)
                     s.clean_deferred(_dir)
 
     def clean_dir(s, _dir, delete_only=False):
@@ -98,20 +100,24 @@ class GitJobDir(object):
         lock = Lock()
         lock.acquire()
         s.unused[_dir] = lock
-        threading.Thread(target=GitJobDir.clean_deferred_handler, args=(s, _dir, lock)).start()
+        threading.Thread(
+            target=GitJobDir.clean_deferred_handler, args=(s, _dir, lock)
+        ).start()
 
     def clean_deferred_handler(s, _dir, lock):
-        #print("clean_deferred_handler() waiting for", _dir)
+        # print("clean_deferred_handler() waiting for", _dir)
         lock.acquire(timeout=s.deferred_clean_delay)
         with s.lock:
             if s.unused.get(_dir) is lock:
-                #print("clean_deferred_handler() triggered for", _dir)
+                # print("clean_deferred_handler() triggered for", _dir)
                 s.clean_dir(_dir)
 
     def checkout(s, repo, commit, **kwargs):
         target_path = s.path(GitJobDir.dirkey(repo, commit, **kwargs))
-        subprocess.check_output(["git", "cache", "clone", repo, commit, target_path],
-                                stderr=subprocess.STDOUT)
+        subprocess.check_output(
+            ["git", "cache", "clone", repo, commit, target_path],
+            stderr=subprocess.STDOUT,
+        )
 
     def cleanup(s):
         with s.lock:
@@ -121,28 +127,41 @@ class GitJobDir(object):
                 except FileNotFoundError:
                     pass
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     gjd = GitJobDir("/tmp/gitjobdir", maxdirs=1)
 
-    _dira = gjd.get("http://github.com/RIOT-OS/RIOT", "c879154d144a349f890ab74ca8e0c70ded359de8")
+    _dira = gjd.get(
+        "http://github.com/RIOT-OS/RIOT", "c879154d144a349f890ab74ca8e0c70ded359de8"
+    )
     print("got", _dira)
-    _dirb = gjd.get("http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9")
+    _dirb = gjd.get(
+        "http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9"
+    )
     print("got", _dirb)
     print("releasing first")
     gjd.release(_dira)
     if not _dirb:
         print("trying second again", _dirb)
-        _dirb = gjd.get("http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9")
+        _dirb = gjd.get(
+            "http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9"
+        )
         print("got", _dirb)
 
     print("releasing 2nd")
     gjd.release(_dirb)
 
-    _exclusive = gjd.get("http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9", "TEST")
+    _exclusive = gjd.get(
+        "http://github.com/RIOT-OS/RIOT",
+        "96ef13dc9801595f4aec8763bd9c36278b5789e9",
+        "TEST",
+    )
     gjd.release(_exclusive)
     time.sleep(1)
 
-    _dirb = gjd.get("http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9")
+    _dirb = gjd.get(
+        "http://github.com/RIOT-OS/RIOT", "96ef13dc9801595f4aec8763bd9c36278b5789e9"
+    )
     print("got", _dirb)
 
     time.sleep(5)
