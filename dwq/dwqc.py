@@ -329,11 +329,12 @@ def main():
             vprint("dwqc: reading jobs from stdin")
             for line in sys.stdin:
                 line = line.rstrip()
-                if args.stdin:
+                if args.stdin and args.command:
                     cmdargs = line.split(" ")
                     command = args.command
                     for i in range(0, len(cmdargs)):
                         command = command.replace("${%i}" % (i + 1), cmdargs[i])
+                    command = command.replace("${0}", line)
                 else:
                     command = line
 
