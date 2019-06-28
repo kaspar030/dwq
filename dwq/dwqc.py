@@ -98,6 +98,13 @@ def parse_args():
         type=int,
         default=sys.maxsize,
     )
+    parser.add_argument(
+        "-t",
+       "--tries",
+        help="try job at most n times (n>0, default: 3)",
+        type=int,
+        default=3,
+    )
     parser.add_argument("-s", "--stdin", help="read from stdin", action="store_true")
     parser.add_argument(
         "-o", "--outfile", help="write job results to file", type=argparse.FileType("w")
@@ -308,16 +315,24 @@ def main():
         print("dwqc: error processing --file argument:", e, file=sys.stderr)
         sys.exit(1)
 
+    base_options = {}
+    if args.exclusive_jobdir:
+        base_options.update({"jobdir": "exclusive"})
+    if file_data:
+        base_options["files"] = file_data
+    if args.tries != 3:
+        if args.tries < 1:
+            print("dwqc: error: --tries < 1!")
+            sys.exit(1)
+
+        base_options["max_retries"] = args.tries - 1
+
     result_list = []
     try:
         jobs = set()
         batch = []
         if args.command and not args.stdin:
-            options = {}
-            if args.exclusive_jobdir:
-                options.update({"jobdir": "exclusive"})
-            if file_data:
-                options["files"] = file_data
+            options = base_options
             queue_job(
                 jobs,
                 job_queue,
@@ -341,10 +356,11 @@ def main():
                 tmp = command.split("###")
                 command = tmp[0]
                 options = {}
+                options.update(base_options)
                 if len(tmp) > 1:
                     command = command.rstrip()
                     try:
-                        options = json.loads(tmp[1])
+                        options.update(json.loads(tmp[1]))
                     except json.decoder.JSONDecodeError:
                         vprint(
                             "dwqc: invalid option JSON. Skipping job.", file=sys.stderr
@@ -352,12 +368,6 @@ def main():
                         continue
 
                 _job_queue = options.get("queue", job_queue)
-
-                if args.exclusive_jobdir:
-                    options.update({"jobdir": "exclusive"})
-
-                if file_data:
-                    options["files"] = file_data
 
                 if args.batch:
                     batch.append(
