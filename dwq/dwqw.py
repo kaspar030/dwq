@@ -82,7 +82,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
     buildnum = 0
     while not shutdown:
         try:
-            if not Disque.connected():
+            if not shutdown and not Disque.connected():
                 time.sleep(1)
                 continue
             while not shutdown:
