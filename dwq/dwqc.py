@@ -147,6 +147,11 @@ def parse_args():
     )
 
     parser.add_argument(
+        "-D", "--disque-url", help="specify disque instance [default: localhost:7711]",
+        type=str, action="store", default=os.environ.get("DWQ_DISQUE_URL", "localhost:7711"),
+    )
+
+    parser.add_argument(
         "--version", action="version", version="%(prog)s " + __version__
     )
 
@@ -282,7 +287,7 @@ def main():
 
     job_queue = args.queue
 
-    Disque.connect(["localhost:7711"])
+    Disque.connect([args.disque_url])
 
     if args.subjob:
         try:
