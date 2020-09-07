@@ -100,7 +100,7 @@ def parse_args():
     )
     parser.add_argument(
         "-t",
-       "--tries",
+        "--tries",
         help="try job at most n times (n>0, default: 3)",
         type=int,
         default=3,
