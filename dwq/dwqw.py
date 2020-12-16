@@ -60,6 +60,12 @@ def parse_args():
         help="name of this worker (default: hostname)",
         default=socket.gethostname(),
     )
+
+    parser.add_argument(
+        "-D", "--disque-url", help="specify disque instance [default: localhost:7711]",
+        type=str, action="store", default=os.environ.get("DWQ_DISQUE_URL", "localhost:7711"),
+    )
+
     parser.add_argument(
         "-v", "--verbose", help="be more verbose", action="count", default=1
     )
@@ -389,7 +395,7 @@ def main():
     _dir = "/tmp/dwq.%s" % str(random.random())
     gitjobdir = GitJobDir(_dir, args.jobs)
 
-    servers = ["localhost:7711"]
+    servers = [args.disque_url]
     try:
         Disque.connect(servers)
         vprint(1, "dwqw: connected.")
