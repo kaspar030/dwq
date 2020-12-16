@@ -36,6 +36,11 @@ def parse_args():
     group.add_argument("-s", "--shutdown", help="shutdown node(s)", action="store_true")
     group.add_argument("-P", "--ping", help="ping node(s)", action="store_true")
 
+    parser.add_argument(
+        "-D", "--disque-url", help="specify disque instance [default: localhost:7711]",
+        type=str, action="store", default=os.environ.get("DWQ_DISQUE_URL", "localhost:7711"),
+    )
+
     #    parser_control.add_argument('-f', '--force', help='don\'t wait for job completion on pause/shutdown',
     #                                action='store_true')
 
@@ -52,8 +57,9 @@ def print_queue(name, qstat):
     print("name:", name, "len:", qstat["len"], "blocked:", qstat["blocked"])
 
 
-def listq(queues):
-    Disque.connect(["localhost:7711"])
+def listq(queues, args):
+    Disque.connect([args.disque_url])
+    queues = args.queues
 
     qstat = Disque.qstat(queues)
     queues = sorted(qstat.keys())
@@ -66,12 +72,13 @@ def listq(queues):
             print('invalid queue "%s"' % name)
 
 
-def drain(queues):
+def drain(args):
+    queues = args.queues
     if not queues:
         print("dwqm: drain: no queues given.")
         sys.exit(1)
 
-    Disque.connect(["localhost:7711"])
+    Disque.connect([args.disque_url])
     disque = Disque.get()
     try:
         while True:
@@ -90,13 +97,13 @@ def drain(queues):
 
 def queue(args):
     if args.drain:
-        drain(args.queues)
+        drain(args)
     elif args.list:
-        listq(args.queues)
+        listq(args)
 
 
 def control(args):
-    Disque.connect(["localhost:7711"])
+    Disque.connect([args.disque_url])
 
     jobargs = {}
     #    if args.force:
