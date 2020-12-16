@@ -58,7 +58,7 @@ def print_queue(name, qstat):
     print("name:", name, "len:", qstat["len"], "blocked:", qstat["blocked"])
 
 
-def listq(queues, args):
+def listq(args):
     Disque.connect([args.disque_url])
     queues = args.queues
 
