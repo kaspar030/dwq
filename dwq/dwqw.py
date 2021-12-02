@@ -320,22 +320,22 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
 
 class SyncSet(object):
-    def __init__(s):
-        s.set = set()
-        s.lock = threading.Lock()
+    def __init__(self):
+        self.set = set()
+        self.lock = threading.Lock()
 
-    def add(s, obj):
-        with s.lock:
-            s.set.add(obj)
+    def add(self, obj):
+        with self.lock:
+            self.set.add(obj)
 
-    def discard(s, obj):
-        with s.lock:
-            s.set.discard(obj)
+    def discard(self, obj):
+        with self.lock:
+            self.set.discard(obj)
 
-    def empty(s):
-        with s.lock:
-            oldset = s.set
-            s.set = set()
+    def empty(self):
+        with self.lock:
+            oldset = self.set
+            self.set = set()
             return oldset
 
 
