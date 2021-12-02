@@ -303,10 +303,10 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     gitjobdir.release(workdir)
 
         except Exception as e:
-            vprint(1, "worker %2i: uncaught exception" % n)
+            print("worker %2i: uncaught exception" % n)
             traceback.print_exc()
-            time.sleep(10)
-            vprint(1, "worker %2i: restarting worker" % n)
+            time.sleep(2)
+            print("worker %2i: restarting worker" % n)
 
 
 class SyncSet(object):
