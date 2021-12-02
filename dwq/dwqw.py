@@ -295,7 +295,6 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                 "body": job.body,
                                 "unique": str(unique),
                                 "times": {
-                                    "workdir_setup": workdir_setup_time,
                                     "cmd_runtime": cmd_runtime,
                                 },
                             }
@@ -307,6 +306,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                 _result["workdir_output"] = workdir_output.decode(
                                     "utf-8", "backslashreplace"
                                 )
+                                _result["times"]["workdir_setup"] = workdir_setup_time
 
                             # pack assets
                             try:
