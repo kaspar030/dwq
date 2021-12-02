@@ -271,7 +271,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             }
 
                             if workdir_output:
-                                _result["workdir_output"] = workdir_output
+                                _result["workdir_output"] = workdir_output.decode("utf-8", "backslashreplace")
 
                             # pack assets
                             try:
