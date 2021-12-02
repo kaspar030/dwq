@@ -51,16 +51,13 @@ class GitJobDir(object):
                         print("gitjobdir: could not get free jobdir slot")
                         return None
                 try:
-                    try:
-                        s.dirs_left -= 1
-                        s.lock.release()
-                        s.checkout(repo, commit, **kwargs)
-                        s.lock.acquire()
-                    except Exception as e:
-                        s.lock.acquire()
-                        raise e
-                except subprocess.CalledProcessError as e:
-                    s.dirs_left += 1
+                    s.dirs_left -= 1
+                    s.lock.release()
+                    output = s.checkout(repo, commit, **kwargs)
+                    s.lock.acquire()
+                except Exception as e:
+                    s.lock.acquire()
+                    s.clean_dir(_dir)
                     raise e
             else:
                 lock = s.unused.pop(_dir, None)
