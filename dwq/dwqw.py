@@ -170,10 +170,11 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     )
 
                     workdir = None
+                    workdir_output = None
                     workdir_error = None
                     try:
                         try:
-                            workdir = gitjobdir.get(
+                            (workdir, workdir_output) = gitjobdir.get(
                                 repo, commit, exclusive=exclusive or str(n)
                             )
                         except subprocess.CalledProcessError as e:
@@ -268,6 +269,9 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                 "body": job.body,
                                 "unique": str(unique),
                             }
+
+                            if workdir_output:
+                                _result["workdir_output"] = workdir_output
 
                             # pack assets
                             try:

@@ -41,7 +41,7 @@ class GitJobDir(object):
 
     def get(s, repo, commit, **kwargs):
         with s.lock:
-
+            output = None
             _dir = s.path(GitJobDir.dirkey(repo, commit, **kwargs))
 
             if dictadd(s.use_counts, _dir, ret_post=False) == None:
@@ -64,7 +64,7 @@ class GitJobDir(object):
                 if lock:
                     lock.release()
 
-            return _dir
+            return (_dir, output)
 
     def clean_unused(s):
         for _dir, lock in s.unused.items():
@@ -111,7 +111,7 @@ class GitJobDir(object):
 
     def checkout(s, repo, commit, **kwargs):
         target_path = s.path(GitJobDir.dirkey(repo, commit, **kwargs))
-        subprocess.check_output(
+        return subprocess.check_output(
             ["git", "cache", "clone", repo, commit, target_path],
             stderr=subprocess.STDOUT,
         )
