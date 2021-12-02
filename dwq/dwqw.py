@@ -364,13 +364,21 @@ def handle_control_job(args, job):
             shutdown = 1
 
         elif cmd == "pause":
-            vprint(1, "dwqw: pause command received. pausing ...")
-            active_event.clear()
-            result = "paused"
+            if not active_event.is_set():
+                vprint(1, "dwqw: pause command received, but already paused")
+                result = "already paused"
+            else:
+                vprint(1, "dwqw: pause command received")
+                active_event.clear()
+                result = "paused"
         elif cmd == "resume":
-            vprint(1, "dwqw: resume command received. resuming ...")
-            active_event.set()
-            result = "resumed"
+            if active_event.is_set():
+                vprint(1, "dwqw: resume command received, but not paused")
+                result = "not paused"
+            else:
+                vprint(1, "dwqw: resume command received. resuming ...")
+                active_event.set()
+                result = "resumed"
         elif cmd == "ping":
             vprint(1, "dwqw: ping received")
             result = "pong"
