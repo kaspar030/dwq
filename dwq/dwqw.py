@@ -10,7 +10,7 @@ import socket
 import traceback
 import multiprocessing
 import shutil
-import subprocess
+from subprocess import run, PIPE, STDOUT, TimeoutExpired
 
 import redis
 from redis.exceptions import ConnectionError, RedisError
@@ -89,7 +89,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
     global active_event
     global shutdown
 
-    worker_str = f"worker {args.name}.{n}"
+    worker_str = f"dwqw@{args.name}.{n}"
     print(f"{worker_str}: started")
     buildnum = 0
     while not shutdown:
@@ -101,7 +101,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                 active_event.wait()
                 jobs = Job.get(args.queues)
                 for job in jobs:
-                    if shutdown:
+                    if shutdown or not active_event.is_set():
                         job.nack()
                         continue
 
@@ -111,7 +111,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         job.done(
                             {
                                 "status": "error",
-                                "output": "dwqw: %s\n" % error,
+                                "output": "{worker_str}: {error}\n",
                                 "worker": args.name,
                                 "runtime": 0,
                                 "body": job.body,
@@ -136,7 +136,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         job.done(
                             {
                                 "status": "error",
-                                "output": f'dwqw: invalid job body: "{job.body}"',
+                                "output": f'{worker_str} invalid job body: "{job.body}"',
                             }
                         )
                         continue
@@ -184,8 +184,8 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             )
                         except subprocess.CalledProcessError as e:
                             workdir_error = (
-                                f"dwqw: {worker_str}: error getting jobdir. output:\n"
-                                + e.output.decode("utf-8")
+                                f"{worker_str}: error getting jobdir. output:\n"
+                                + e.output.decode("utf-8", "backslashreplace")
                             )
 
                         if not workdir:
@@ -200,7 +200,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                     {
                                         "status": "error",
                                         "output": workdir_error
-                                        or f"dwqw: {worker_str}: error getting jobdir\n",
+                                        or f"{worker_str}: error getting jobdir\n",
                                         "worker": args.name,
                                         "runtime": 0,
                                         "body": job.body,
@@ -213,7 +213,10 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             working_set.discard(job.job_id)
                             continue
 
-                        util.write_files(options.get("files"), workdir)
+                        workdir_done_at = time.time()
+                        files = options.get("files")
+                        util.write_files(files, workdir)
+                        write_files_done_at = time.time()
 
                         # assets
                         asset_dir = os.path.join(
@@ -223,22 +226,40 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                         timeout = options.get("timeout", 300)
 
-                        if timeout >= 8:
-                            # send explit nack before disque times us out
-                            # but only if original timeout is not too small
-                            timeout -= 2
+                        # subtract time used for checkout and job files
+                        timeout -= time.time() - before
 
-                        handle = cmd_server_pool.runcmd(
-                            command,
-                            cwd=workdir,
-                            shell=True,
-                            env=_env,
-                            start_new_session=True,
-                        )
-                        output, result = handle.wait(timeout=timeout)
-                        if handle.timeout:
+                        # be sure to timeout a bit earlier
+                        timeout -= 1
+
+                        command_start_at = time.time()
+
+                        if timeout > 0:
+                            try:
+                                res = run(
+                                    command,
+                                    stdout=PIPE,
+                                    stderr=STDOUT,
+                                    cwd=workdir,
+                                    shell=True,
+                                    env=_env,
+                                    start_new_session=True,
+                                    timeout=timeout,
+                                )
+
+                                result = res.returncode
+                                output = res.stdout.decode("utf-8", "backslashreplace")
+
+                            except TimeoutExpired as e:
+                                result = "timeout"
+                                decoded = e.output.decode("utf-8", "backslashreplace")
+                                output = f"{decoded}{worker_str}: error: timed out\n"
+
+                        else:
                             result = "timeout"
-                            output = "dwqw: command timed out\n"
+                            output = f"{worker_str}: command timed out while setting up job\n"
+
+                        command_done_at = time.time()
 
                         if (result not in {0, "0", "pass"}) and job.nacks < options.get(
                             "max_retries", 2
@@ -255,7 +276,9 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             )
                             job.nack()
                         else:
-                            runtime = time.time() - before
+                            cmd_runtime = command_done_at - command_start_at
+                            workdir_setup_time = workdir_done_at - before
+                            write_files_time = write_files_done_at - workdir_done_at
 
                             options = job.body.get("options")
                             if options:
@@ -269,10 +292,16 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                 "status": result,
                                 "output": output,
                                 "worker": args.name,
-                                "runtime": runtime,
                                 "body": job.body,
                                 "unique": str(unique),
+                                "times": {
+                                    "workdir_setup": workdir_setup_time,
+                                    "cmd_runtime": cmd_runtime,
+                                },
                             }
+
+                            if files:
+                                _result["times"]["write_files"] = write_files_time
 
                             if workdir_output:
                                 _result["workdir_output"] = workdir_output.decode(
@@ -283,6 +312,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             try:
                                 asset_files = os.listdir(asset_dir)
                                 if asset_files:
+                                    before_assets = time.time()
                                     _result.update(
                                         {
                                             "assets": util.gen_file_data(
@@ -291,8 +321,15 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                         }
                                     )
                                     shutil.rmtree(asset_dir, ignore_errors=True)
+                                    _result["times"]["assets"] = (
+                                        time.time() - before_assets
+                                    )
+
                             except FileNotFoundError:
                                 pass
+
+                            runtime = time.time() - before
+                            _result["runtime"] = runtime
 
                             job.done(_result)
 
