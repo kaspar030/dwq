@@ -105,6 +105,13 @@ def parse_args():
         type=int,
         default=3,
     )
+    parser.add_argument(
+        "-T",
+        "--timeout",
+        help="job timeout (max runtime *after* queue time) (n>0, default: 300)",
+        type=int,
+        default=300,
+    )
     parser.add_argument("-s", "--stdin", help="read from stdin", action="store_true")
     parser.add_argument(
         "-o", "--outfile", help="write job results to file", type=argparse.FileType("w")
@@ -331,6 +338,13 @@ def main():
             sys.exit(1)
 
         base_options["max_retries"] = args.tries - 1
+
+    if args.timeout != 300:
+        if args.timeout <= 0:
+            print("dwqc: error: --timeout <=0!")
+            sys.exit(1)
+
+        base_options["timeout"] = args.timeout
 
     result_list = []
     try:
