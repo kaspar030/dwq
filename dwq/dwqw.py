@@ -62,8 +62,12 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-D", "--disque-url", help="specify disque instance [default: localhost:7711]",
-        type=str, action="store", default=os.environ.get("DWQ_DISQUE_URL", "localhost:7711"),
+        "-D",
+        "--disque-url",
+        help="specify disque instance [default: localhost:7711]",
+        type=str,
+        action="store",
+        default=os.environ.get("DWQ_DISQUE_URL", "localhost:7711"),
     )
 
     parser.add_argument(
@@ -84,7 +88,9 @@ active_event = threading.Event()
 def worker(n, cmd_server_pool, gitjobdir, args, working_set):
     global active_event
     global shutdown
-    print("worker %2i: started" % n)
+
+    worker_str = f"worker {args.name}.{n}"
+    print(f"{worker_str}: started")
     buildnum = 0
     while not shutdown:
         try:
@@ -101,7 +107,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                     if job.additional_deliveries > 2:
                         error = "too many deliveries (usual reason: timeout)"
-                        vprint(2, "worker %2i: %s" % (n, error))
+                        vprint(2, f"{worker_str}: {error}")
                         job.done(
                             {
                                 "status": "error",
@@ -118,8 +124,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     before = time.time()
                     vprint(
                         2,
-                        "worker %2i: got job %s from queue %s"
-                        % (n, job.job_id, job.queue_name),
+                        f"{worker_str}: got job {job.job_id} from queue {job.queue_name}",
                     )
 
                     try:
@@ -127,16 +132,16 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         commit = job.body["commit"]
                         command = job.body["command"]
                     except KeyError:
-                        vprint(2, "worker %2i: invalid job json body" % n)
+                        vprint(2, f"{worker_str}: invalid job json body")
                         job.done(
                             {
                                 "status": "error",
-                                "output": "worker.py: invalid job description",
+                                "output": f'dwqw: invalid job body: "{job.body}"',
                             }
                         )
                         continue
 
-                    vprint(2, 'worker %2i: command="%s"' % (n, command))
+                    vprint(2, f'{worker_str}: command="{command}"')
 
                     exclusive = None
                     try:
@@ -179,7 +184,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             )
                         except subprocess.CalledProcessError as e:
                             workdir_error = (
-                                "dwqw: error getting jobdir. output: \n"
+                                f"dwqw: {worker_str}: error getting jobdir. output:\n"
                                 + e.output.decode("utf-8")
                             )
 
@@ -188,15 +193,14 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                 job.nack()
                                 vprint(
                                     1,
-                                    "worker %2i: error getting job dir, requeueing job"
-                                    % n,
+                                    f"{worker_str}: error getting job dir, requeueing job",
                                 )
                             else:
                                 job.done(
                                     {
                                         "status": "error",
                                         "output": workdir_error
-                                        or "dwqw: error getting jobdir\n",
+                                        or f"dwqw: {worker_str}: error getting jobdir\n",
                                         "worker": args.name,
                                         "runtime": 0,
                                         "body": job.body,
@@ -204,7 +208,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                 )
                                 vprint(
                                     1,
-                                    "worker %2i: cannot get job dir, erroring job" % n,
+                                    f"{worker_str}: cannot get job dir, erroring job",
                                 )
                             working_set.discard(job.job_id)
                             continue
@@ -241,7 +245,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         ):
                             vprint(
                                 2,
-                                "worker %2i: command:" % n,
+                                f"{worker_str}: command:",
                                 command,
                                 "result:",
                                 result,
@@ -271,7 +275,9 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             }
 
                             if workdir_output:
-                                _result["workdir_output"] = workdir_output.decode("utf-8", "backslashreplace")
+                                _result["workdir_output"] = workdir_output.decode(
+                                    "utf-8", "backslashreplace"
+                                )
 
                             # pack assets
                             try:
@@ -292,7 +298,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                             vprint(
                                 2,
-                                "worker %2i: command:" % n,
+                                f"{worker_str}: command:",
                                 command,
                                 "result:",
                                 result,
@@ -307,10 +313,10 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     gitjobdir.release(workdir)
 
         except Exception as e:
-            print("worker %2i: uncaught exception" % n)
+            print(f"{worker_str}: uncaught exception")
             traceback.print_exc()
             time.sleep(2)
-            print("worker %2i: restarting worker" % n)
+            print(f"{worker_str}: restarting worker")
 
 
 class SyncSet(object):
