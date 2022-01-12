@@ -229,8 +229,9 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         # subtract time used for checkout and job files
                         timeout -= time.time() - before
 
-                        # be sure to timeout a bit earlier
-                        timeout -= 1
+                        # be sure to timeout a bit earlier, so transmit/network delays
+                        # don't make disque time-out itself.
+                        timeout -= 10
 
                         command_start_at = time.time()
 
