@@ -111,7 +111,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         job.done(
                             {
                                 "status": "error",
-                                "output": "{worker_str}: {error}\n",
+                                "output": f"{worker_str}: {error}\n",
                                 "worker": args.name,
                                 "runtime": 0,
                                 "body": job.body,
