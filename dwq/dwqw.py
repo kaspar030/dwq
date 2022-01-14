@@ -10,7 +10,7 @@ import socket
 import traceback
 import multiprocessing
 import shutil
-from subprocess import run, PIPE, STDOUT, TimeoutExpired
+from subprocess import run, PIPE, STDOUT, TimeoutExpired, CalledProcessError
 
 import redis
 from redis.exceptions import ConnectionError, RedisError
@@ -182,7 +182,7 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             (workdir, workdir_output) = gitjobdir.get(
                                 repo, commit, exclusive=exclusive or str(n)
                             )
-                        except subprocess.CalledProcessError as e:
+                        except CalledProcessError as e:
                             workdir_error = (
                                 f"{worker_str}: error getting jobdir. output:\n"
                                 + e.output.decode("utf-8", "backslashreplace")
