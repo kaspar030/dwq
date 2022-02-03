@@ -59,7 +59,6 @@ def parse_args():
         "--repo",
         help="git repository to work on",
         type=str,
-        required="DWQ_REPO" not in os.environ,
         default=os.environ.get("DWQ_REPO"),
     )
 
@@ -68,7 +67,6 @@ def parse_args():
         "--commit",
         help="git commit to work on",
         type=str,
-        required="DWQ_COMMIT" not in os.environ,
         default=os.environ.get("DWQ_COMMIT"),
     )
 
@@ -183,7 +181,14 @@ def get_env(env):
 
 
 def create_body(args, command, options=None, parent_id=None):
-    body = {"repo": args.repo, "commit": args.commit, "command": command}
+    body = {"command": command}
+
+    if args.repo:
+        body["repo"] = args.repo
+
+    if args.commit:
+        body["commit"] = args.commit
+
     if options:
         body["options"] = options
 
@@ -289,6 +294,10 @@ def handle_assets(job, args):
 def main():
     global verbose
     args = parse_args()
+
+    if (args.repo is None) ^ (args.commit is None):
+        print("dwqc: error: both repo and commit must be specified!", file=sys.stderr)
+        sys.exit(1)
 
     signal.signal(signal.SIGTERM, sigterm_handler)
 
