@@ -353,6 +353,33 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
         except Exception as e:
             print(f"{worker_str}: uncaught exception")
             traceback.print_exc()
+
+            # Depending on where the exception was raised, any of these may
+            # have been around; better process them to avoid the queue manager
+            # starving on lack of feedback
+            #
+            # It shouldn't hurt to NACK or DONE jobs if they have already been
+            # DONE; anyway, this is an exceptional situation, and the error
+            # does indicate that the receiver of the error report should be
+            # aware that the crash might have been misassigned.
+            jobs = [locals().get("job")] + list(locals().get("jobs", []))
+            for job in jobs:
+                if job.nacks < options.get("max_retries", 2):
+                    # Hasn't crashed often enough, letting someone else try it
+                    job.nack()
+                else:
+                    job.done(
+                        {
+                            "status": "error",
+                            "output": f"Uncaught exception {e}; assigning it"
+                              " to any of the current jobs.\n\nTraceback:\n"
+                              + traceback.format_exc(),
+                            "worker": args.name,
+                            "runtime": 0,
+                            "body": job.body,
+                        }
+                    )
+
             time.sleep(2)
             print(f"{worker_str}: restarting worker")
 
