@@ -128,8 +128,6 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     )
 
                     try:
-                        repo = job.body["repo"]
-                        commit = job.body["commit"]
                         command = job.body["command"]
                     except KeyError:
                         vprint(2, f"{worker_str}: invalid job json body")
@@ -142,6 +140,25 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         continue
 
                     vprint(2, f'{worker_str}: command="{command}"')
+
+                    repo = None
+                    commit = None
+
+                    try:
+                        repo = job.body["repo"]
+                        commit = job.body["commit"]
+                    except KeyError:
+                        pass
+
+                    if (repo is None) ^ (commit is None):
+                        vprint(2, f"{worker_str}: invalid job json body, only one of repo and commit specified")
+                        job.done(
+                            {
+                                "status": "error",
+                                "output": f'{worker_str} invalid job body: "{job.body}"',
+                            }
+                        )
+                        continue
 
                     exclusive = None
                     try:
@@ -162,8 +179,6 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                     _env.update(
                         {
-                            "DWQ_REPO": repo,
-                            "DWQ_COMMIT": commit,
                             "DWQ_QUEUE": job.queue_name,
                             "DWQ_WORKER": args.name,
                             "DWQ_WORKER_BUILDNUM": str(buildnum),
@@ -178,40 +193,49 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     workdir_output = None
                     workdir_error = None
                     try:
-                        try:
-                            (workdir, workdir_output) = gitjobdir.get(
-                                repo, commit, exclusive=exclusive or str(n)
-                            )
-                        except CalledProcessError as e:
-                            workdir_error = (
-                                f"{worker_str}: error getting jobdir. output:\n"
-                                + e.output.decode("utf-8", "backslashreplace")
-                            )
+                        if repo is not None:
+                            _env.update(
+                            {
+                                "DWQ_REPO": repo,
+                                "DWQ_COMMIT": commit,
+                            })
 
-                        if not workdir:
-                            if job.nacks < options.get("max_retries", 2):
-                                job.nack()
-                                vprint(
-                                    1,
-                                    f"{worker_str}: error getting job dir, requeueing job",
+                            try:
+                                (workdir, workdir_output) = gitjobdir.get(
+                                    repo, commit, exclusive=exclusive or str(n)
                                 )
-                            else:
-                                job.done(
-                                    {
-                                        "status": "error",
-                                        "output": workdir_error
-                                        or f"{worker_str}: error getting jobdir\n",
-                                        "worker": args.name,
-                                        "runtime": 0,
-                                        "body": job.body,
-                                    }
+                            except CalledProcessError as e:
+                                workdir_error = (
+                                    f"{worker_str}: error getting jobdir. output:\n"
+                                    + e.output.decode("utf-8", "backslashreplace")
                                 )
-                                vprint(
-                                    1,
-                                    f"{worker_str}: cannot get job dir, erroring job",
-                                )
-                            working_set.discard(job.job_id)
-                            continue
+
+                            if not workdir:
+                                if job.nacks < options.get("max_retries", 2):
+                                    job.nack()
+                                    vprint(
+                                        1,
+                                        f"{worker_str}: error getting job dir, requeueing job",
+                                    )
+                                else:
+                                    job.done(
+                                        {
+                                            "status": "error",
+                                            "output": workdir_error
+                                            or f"{worker_str}: error getting jobdir\n",
+                                            "worker": args.name,
+                                            "runtime": 0,
+                                            "body": job.body,
+                                        }
+                                    )
+                                    vprint(
+                                        1,
+                                        f"{worker_str}: cannot get job dir, erroring job",
+                                    )
+                                working_set.discard(job.job_id)
+                                continue
+                        else:
+                            workdir = "/tmp"
 
                         workdir_done_at = time.time()
                         files = options.get("files")
@@ -344,11 +368,12 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                             )
                             working_set.discard(job.job_id)
                     except Exception as e:
-                        if workdir:
+                        if workdir and repo:
                             gitjobdir.release(workdir)
                         raise e
 
-                    gitjobdir.release(workdir)
+                    if repo:
+                        gitjobdir.release(workdir)
 
         except Exception as e:
             print(f"{worker_str}: uncaught exception")
