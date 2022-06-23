@@ -568,6 +568,11 @@ def main():
         Job.cancel_all(jobs)
         if args.report:
             Job.add(args.report, {"status": "canceled"})
+
+        if args.outfile:
+            args.outfile.seek(0)
+            args.outfile.write(json.dumps(result_list))
+
         sys.exit(1)
 
     if args.report:
