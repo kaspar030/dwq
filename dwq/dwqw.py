@@ -217,6 +217,8 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                         1,
                                         f"{worker_str}: error getting job dir, requeueing job",
                                     )
+                                    if workdir_error:
+                                        vprint(1, f"{worker_str}: jobdir error: \"{workdir_error}\"")
                                 else:
                                     job.done(
                                         {
