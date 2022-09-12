@@ -97,6 +97,12 @@ def parse_args():
         default=sys.maxsize,
     )
     parser.add_argument(
+        "-n",
+        "--no-error-output",
+        help="don't print output of errored jobs",
+        action="store_true",
+    )
+    parser.add_argument(
         "-t",
         "--tries",
         help="try job at most n times (n>0, default: 3)",
@@ -482,14 +488,15 @@ def main():
                         job_id = job["job_id"]
                         jobs.remove(job_id)
                         done += 1
+                        _has_passed = job["result"]["status"] in {0, "0", "pass"}
                         # if args.progress:
                         #    vprint("\033[F\033[K", end="")
                         # vprint("dwqc: job %s done. result=%s" % (job["job_id"], job["result"]["status"]))
                         if not args.quiet:
-                            if args.progress:
-                                print("\033[K", end="")
-                            print(job["result"]["output"], end="")
-                        _has_passed = job["result"]["status"] in {0, "0", "pass"}
+                            if _has_passed or (not args.no_error_output):
+                                if args.progress:
+                                    print("\033[K", end="")
+                                print(job["result"]["output"], end="")
                         if _has_passed:
                             passed += 1
                             handle_assets(job, args)
