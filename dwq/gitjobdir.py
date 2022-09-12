@@ -57,7 +57,10 @@ class GitJobDir(object):
                     s.lock.acquire()
                 except Exception as e:
                     s.lock.acquire()
-                    s.clean_dir(_dir)
+                    try:
+                        s.clean_dir(_dir)
+                    except FileNotFoundError:
+                        pass
                     raise e
             else:
                 lock = s.unused.pop(_dir, None)
