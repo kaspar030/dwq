@@ -479,9 +479,11 @@ def main():
                                 if args.progress:
                                     print("\033[K", end="")
                                 print(job["result"]["output"], end="")
+
+                        handle_assets(job, args)
+
                         if _has_passed:
                             passed += 1
-                            handle_assets(job, args)
                         else:
                             failed += 1
                             try:
