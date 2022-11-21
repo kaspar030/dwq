@@ -12,34 +12,11 @@ def gen_file_data(names, root=None):
     if not root:
         root = os.getcwd()
     for name in names:
-        parts = name.split(":", maxsplit=1)
-        if len(parts) == 2:
-            local, remote = parts
-            if remote.startswith("/"):
-                raise GenFileDataException(
-                    "file %s: remote name %s must be relative" % (local, remote)
-                )
-
-            if ".." in remote:
-                raise GenFileDataException(
-                    'file %s: no ".." allowed in remote name %s' % (local, remote)
-                )
-        else:
-            local = name
-            if name.startswith("/"):
-                if not name.startswith(root + "/"):
-                    raise Exception(
-                        "file %s: remote path must be relative to cwd" % local
-                    )
-                else:
-                    remote = os.path.abspath(name)[len(root) + 1 :]
-            else:
-                remote = name
-
+        local = name
         if not local.startswith("/"):
             local = os.path.join(root, local)
         try:
-            res[remote] = base64_file(local)
+            res[name] = base64_file(local)
         except FileNotFoundError as e:
             raise GenFileDataException(e)
 

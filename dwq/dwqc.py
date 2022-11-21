@@ -146,15 +146,7 @@ def parse_args():
         default=[],
     )
     parser.add_argument(
-        "-a",
-        "--asset",
-        help="save specific asset",
-        type=str,
-        action="append",
-        default=[],
-    )
-    parser.add_argument(
-        "-A", "--asset-dir", help="save all assets", type=str, action="store"
+        "-A", "--asset-dir", help="save all assets to specified folder", type=str, action="store"
     )
 
     parser.add_argument(
@@ -261,39 +253,25 @@ def dict_dictadd(_dict, key):
 
 def handle_assets(job, args):
     assets = job["result"].get("assets")
-    asset_dir = args.asset_dir
+    asset_dir = os.path.abspath(args.asset_dir)
 
     if assets:
-        asset_map = {}
-        for _asset in args.asset:
-            _split = _asset.split(":")
-            if len(_split) == 1:
-                remote = _asset
-                local = _asset
-            elif len(_split) == 2:
-                remote, local = _split
-            else:
-                print('dwqc: error: invalid asset spec "%s"' % _asset, file=sys.stderr)
-                sys.exit(1)
-
-            asset_map[remote] = local
-
         for remote, data in assets.items():
-            local = asset_map.get(remote)
-            if not local:
-                if asset_dir:
-                    local = os.path.realpath(os.path.join(asset_dir, remote))
-                    if not local.startswith(asset_dir):
-                        print(
-                            'dwqc: warning: asset "%s" is not relative'
-                            ' to "%s", ignoring' % (remote, asset_dir),
-                            file=sys.stderr,
-                        )
-                else:
+            if asset_dir:
+                local = os.path.abspath(os.path.join(asset_dir, remote))
+                if not local.startswith(asset_dir):
                     print(
-                        'dwqc: warning: ignoring asset "%s"' % remote, file=sys.stderr
+                        'dwqc: warning: asset "%s" is not relative'
+                        ' to "%s", ignoring' % (remote, asset_dir), local,
+                        file=sys.stderr,
                     )
                     continue
+            else:
+                print(
+                    'dwqc: warning: ignoring asset "%s"' % remote, file=sys.stderr
+                )
+                continue
+
             util.write_files({local: data})
 
 

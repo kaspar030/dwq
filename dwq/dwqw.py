@@ -151,7 +151,10 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                         pass
 
                     if (repo is None) ^ (commit is None):
-                        vprint(2, f"{worker_str}: invalid job json body, only one of repo and commit specified")
+                        vprint(
+                            2,
+                            f"{worker_str}: invalid job json body, only one of repo and commit specified",
+                        )
                         job.done(
                             {
                                 "status": "error",
@@ -195,10 +198,11 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                     try:
                         if repo is not None:
                             _env.update(
-                            {
-                                "DWQ_REPO": repo,
-                                "DWQ_COMMIT": commit,
-                            })
+                                {
+                                    "DWQ_REPO": repo,
+                                    "DWQ_COMMIT": commit,
+                                }
+                            )
 
                             try:
                                 (workdir, workdir_output) = gitjobdir.get(
@@ -218,7 +222,10 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
                                         f"{worker_str}: error getting job dir, requeueing job",
                                     )
                                     if workdir_error:
-                                        vprint(1, f"{worker_str}: jobdir error: \"{workdir_error}\"")
+                                        vprint(
+                                            1,
+                                            f'{worker_str}: jobdir error: "{workdir_error}"',
+                                        )
                                 else:
                                     job.done(
                                         {
@@ -337,7 +344,21 @@ def worker(n, cmd_server_pool, gitjobdir, args, working_set):
 
                             # pack assets
                             try:
-                                asset_files = os.listdir(asset_dir)
+                                asset_files = []
+                                for subdir, _, subdir_files in os.walk(asset_dir):
+                                    # subdir is the absolute folder,
+                                    # subdir_files a list of files.
+                                    # here, we compile a list of file paths
+                                    # relative to asset_dir.
+                                    asset_files.extend(
+                                        [
+                                            os.path.relpath(
+                                                os.path.join(subdir, f), asset_dir
+                                            )
+                                            for f in subdir_files
+                                        ]
+                                    )
+
                                 if asset_files:
                                     before_assets = time.time()
                                     _result.update(
