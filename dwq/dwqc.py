@@ -553,7 +553,7 @@ def main():
                                 )
 
                         if not _has_passed:
-                            if failed > failed_expected:
+                            if failed >= failed_expected:
                                 if (failed - failed_expected) > args.maxfail:
                                     print(
                                         "dwqc: more than %i jobs failed. Exiting."
