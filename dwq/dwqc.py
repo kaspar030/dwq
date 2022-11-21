@@ -253,9 +253,13 @@ def dict_dictadd(_dict, key):
 
 def handle_assets(job, args):
     assets = job["result"].get("assets")
-    asset_dir = os.path.abspath(args.asset_dir)
 
     if assets:
+        if args.asset_dir is None:
+            print('dwqc: warning: assets ignored (no asset-dir specified)')
+            return
+
+        asset_dir = os.path.abspath(args.asset_dir)
         for remote, data in assets.items():
             if asset_dir:
                 local = os.path.abspath(os.path.join(asset_dir, remote))
