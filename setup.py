@@ -57,6 +57,7 @@ setup(
             'dwqc=dwq.dwqc:main',
             'dwqm=dwq.dwqm:main',
             'dwqw=dwq.dwqw:main',
+            'dwq-localjob=dwq.dwq_localjob:main',
         ],
     },
 )
